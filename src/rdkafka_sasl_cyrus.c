@@ -163,6 +163,69 @@ static ssize_t render_callback (const char *key, char *buf,
         }
 }
 
+/**
+ * Add a kerberos api block to refresh the ticket
+ *
+ * Returns 0 on success, not 0 on error
+ */
+static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
+        krb5_error_code ret = 0;
+        krb5_creds creds;
+        krb5_principal principal = NULL;
+        krb5_context context;
+        krb5_ccache ccache;
+        krb5_get_init_creds_opt * options = NULL;
+        const char * princ_name = "krb5sample@EXAMPLE.COM";
+        const char * password = "krb5sam";
+        const char * service_name = "krb5service";
+        const char * cache_name = "krb5_librdkafka_out_cache";
+        int stage = 0;
+
+        memset(&creds, 0, sizeof(creds));
+        krb5_init_context(&context);
+
+        switch(stage) {
+                /* Configure */
+                default:
+                        stage = 0;
+                case 0:
+                        if((ret = krb5_cc_resolve(context, cache_name, &ccache)))
+                                break;
+                stage++;
+                case 1:
+                        if((ret = krb5_parse_name_flags(context, princ_name, 0, &principal)))
+                                break;
+                stage++;
+                case 2:
+                        if((ret = krb5_get_init_creds_opt_alloc(context, &options)))
+                                break;
+                stage++;
+                case 3:
+                        if((ret = krb5_get_init_creds_opt_set_out_ccache(context, options, ccache)))
+                                break;
+                stage++;
+                /* Connect */
+                case 4:
+                        if((ret = krb5_get_init_creds_password(context, &creds, principal, password,
+                                                        NULL, NULL, 0, service_name, options)))
+                                break;
+                stage++;
+                case 5:
+                        if((ret = krb5_verify_init_creds(context, &creds, NULL, NULL, NULL, NULL)))
+                                break;
+                stage++;
+        }
+
+        rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
+                        "stage = %d, error code = %d", stage, ret);
+
+        if(options) krb5_get_init_creds_opt_free(context, options);
+        if(creds.client == principal) creds.client = 0;
+        krb5_free_principal(context, principal);
+        krb5_free_cred_contents(context, &creds);
+
+        return 0;
+}
 
 /**
  * Execute kinit to refresh ticket.
@@ -172,6 +235,23 @@ static ssize_t render_callback (const char *key, char *buf,
  * Locality: any
  */
 static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
+
+        mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
+        rd_kafka_krb5_tgt_refresh(rkb);
+        mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
+
+        rd_rkb_dbg(rkb, SECURITY, "SASLREFRESH", "SASL key refreshed");
+        return 0;
+}
+
+/**
+ * Execute kinit to refresh ticket.
+ *
+ * Returns 0 on success, -1 on error.
+ *
+ * Locality: any
+ */
+static int rd_kafka_sasl_cyrus_kinit_refresh_backup (rd_kafka_broker_t *rkb) {
         rd_kafka_t *rk = rkb->rkb_rk;
         int r;
         char *cmd;
@@ -188,7 +268,7 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
         if (!cmd) {
                 rd_rkb_log(rkb, LOG_ERR, "SASLREFRESH",
                            "Failed to construct kinit command "
-                           "from sasl.kerberos.kinit.cmd template: %s",
+                                   "from sasl.kerberos.kinit.cmd template: %s",
                            errstr);
                 return -1;
         }
