@@ -27,3 +27,6 @@ staging-docs
 tmp
 stats*.json
 test_report*.json
+
+.idea/
+cmake-build-debug
