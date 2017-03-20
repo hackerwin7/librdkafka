@@ -178,7 +178,6 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
         const char * princ_name = "krb5sample@YM.GSLB.QIANXUN.COM";
         const char * password = "krb5sam";
         const char * service_name = "kafka/localhost";
-        const char * cache_name = "/tmp/krb5cc_0";
         int stage = 0;
 
         memset(&creds, 0, sizeof(creds));
@@ -189,7 +188,7 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
                 default:
                         stage = 0;
                 case 0:
-                        if((ret = krb5_cc_resolve(context, cache_name, &ccache)))
+                        if((ret = krb5_cc_default(context, &ccache)))
                                 break;
                 stage++;
                 case 1:
