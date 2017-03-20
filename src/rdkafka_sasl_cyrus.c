@@ -173,7 +173,7 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
         krb5_creds creds;
         krb5_principal principal = NULL;
         krb5_context context;
-        krb5_ccache ccache;
+        krb5_ccache ccache = NULL;
         krb5_get_init_creds_opt * options = NULL;
         const char * princ_name = "krb5sample@YM.GSLB.QIANXUN.COM";
         const char * password = "krb5sam";
@@ -212,6 +212,10 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
                 case 5:
                         if((ret = krb5_verify_init_creds(context, &creds, NULL, NULL, NULL, NULL)))
                                 break;
+                stage++;
+                case 6:
+                        if(krb5_cc_switch(context, ccache))
+                            break;
                 stage++;
         }
 
