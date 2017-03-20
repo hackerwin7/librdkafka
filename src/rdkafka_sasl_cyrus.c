@@ -175,9 +175,9 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
         krb5_context context;
         krb5_ccache ccache;
         krb5_get_init_creds_opt * options = NULL;
-        const char * princ_name = "krb5sample@EXAMPLE.COM";
+        const char * princ_name = "krb5sample@YM.GSLB.QIANXUN.COM";
         const char * password = "krb5sam";
-        const char * service_name = "krb5service";
+        const char * service_name = "zookeeper";
         const char * cache_name = "krb5_librdkafka_out_cache";
         int stage = 0;
 
