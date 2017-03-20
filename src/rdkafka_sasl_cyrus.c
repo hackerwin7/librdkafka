@@ -226,6 +226,8 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
         if(creds.client == principal) creds.client = 0;
         krb5_free_principal(context, principal);
         krb5_free_cred_contents(context, &creds);
+        krb5_cc_close(context, ccache);
+        krb5_free_context(context);
 
         return 0;
 }
