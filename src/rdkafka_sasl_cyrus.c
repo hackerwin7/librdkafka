@@ -177,8 +177,8 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
         krb5_get_init_creds_opt * options = NULL;
         const char * princ_name = "krb5sample@YM.GSLB.QIANXUN.COM";
         const char * password = "krb5sam";
-        const char * service_name = "kafka";
-        const char * cache_name = "krb5_librdkafka_out_cache";
+        const char * service_name = "kafka/localhost";
+        const char * cache_name = "/tmp/krb5cc_0";
         int stage = 0;
 
         memset(&creds, 0, sizeof(creds));
