@@ -194,10 +194,10 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
         rd_kafka_conf_t conf = rkb->rkb_rk->rk_conf;
         *use_cmd = strcmp(conf.sasl.usecmd, "true") == 0 ? 1 : 0;
         *use_keytab = strcmp(conf.sasl.usekeytab, "true") == 0 ? 1 : 0;
-        memcpy(service_name, conf.sasl.service_name, sizeof(conf.sasl.service_name));
-        memcpy(princ_name, conf.sasl.principal, sizeof(conf.sasl.principal));
-        memcpy(princ_password, conf.sasl.princ_password, sizeof(conf.sasl.princ_password));
-        memcpy(keytab, conf.sasl.keytab, sizeof(conf.sasl.keytab));
+        memcpy(service_name, conf.sasl.service_name, strlen(conf.sasl.service_name));
+        memcpy(princ_name, conf.sasl.principal, strlen(conf.sasl.principal));
+        memcpy(princ_password, conf.sasl.princ_password, strlen(conf.sasl.princ_password));
+        memcpy(keytab, conf.sasl.keytab, strlen(conf.sasl.keytab));
 }
 
 /**
