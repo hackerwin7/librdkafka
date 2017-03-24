@@ -220,7 +220,7 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb) {
         }
 
         rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
-               "stage = %d, error code = %"PRId32"d", stage, ret);
+               "stage = %d, error code = %"PRId32"", stage, ret);
 
         if(options) krb5_get_init_creds_opt_free(context, options);
         if(creds.client == principal) creds.client = 0;
@@ -246,7 +246,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
     krb5_keytab keytab = 0;
     krb5_get_init_creds_opt * options = NULL;
     const char * princ_name = "krb5samplekeytab";
-    const char * keytab_name = "/data0/rdkafka/krb5samplekeytab.keytab";
+    const char * keytab_name = "/data0/servers/krb5samplekeytab.keytab";
     const char * service_name = "kafka/bjhc-storm-medusa-16627.jd.com";
     int stage = 0;
 
@@ -294,7 +294,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
     }
 
     rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
-               "stage = %d, error code = %"PRId32"d", stage, ret);
+               "stage = %d, error code = %"PRId32"", stage, ret);
 
     if(options) krb5_get_init_creds_opt_free(context, options);
     if(creds.client == principal) creds.client = 0;
