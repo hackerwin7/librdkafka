@@ -177,7 +177,7 @@ static ssize_t render_callback (const char *key, char *buf,
  */
 static void rd_kafka_krb5_conf_get_retrieve(rd_kafka_broker_t *rkb, int *use_cmd, int *use_keytab, char *service_name,
                                            char *princ_name, char *princ_password, char *keytab) {
-        char dest[512];
+        char dest[1024];
         size_t destsize = sizeof(dest);
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.use.cmd", dest, &destsize);
         *use_cmd = strcmp(dest, "true") == 0 ? 1 : 0;
@@ -194,10 +194,10 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
         rd_kafka_conf_t conf = rkb->rkb_rk->rk_conf;
         *use_cmd = strcmp(conf.sasl.usecmd, "true") == 0 ? 1 : 0;
         *use_keytab = strcmp(conf.sasl.usekeytab, "true") == 0 ? 1 : 0;
-        memcpy(service_name, conf.sasl.service_name, strlen(conf.sasl.service_name));
-        memcpy(princ_name, conf.sasl.principal, strlen(conf.sasl.principal));
-        memcpy(princ_password, conf.sasl.princ_password, strlen(conf.sasl.princ_password));
-        memcpy(keytab, conf.sasl.keytab, strlen(conf.sasl.keytab));
+        strcpy(service_name, conf.sasl.service_name);
+		strcpy(princ_name, conf.sasl.principal);
+		strcpy(princ_password, conf.sasl.princ_password);
+        strcpy(keytab, conf.sasl.keytab);
 }
 
 /**
