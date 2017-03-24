@@ -168,7 +168,7 @@ static ssize_t render_callback (const char *key, char *buf,
  *
  * Returns 0 on success, not 0 on error
  */
-static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
+static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb) {
         krb5_error_code ret = 0;
         krb5_creds creds;
         krb5_principal principal = NULL;
@@ -233,6 +233,81 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
 }
 
 /**
+ * Add a kerberos api block to refresh the ticket
+ *
+ * Returns 0 on success, not 0 on error
+ */
+static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
+    krb5_error_code ret = 0;
+    krb5_creds creds;
+    krb5_principal principal = NULL;
+    krb5_context context;
+    krb5_ccache ccache = NULL;
+    krb5_keytab keytab = 0;
+    krb5_get_init_creds_opt * options = NULL;
+    const char * princ_name = "krb5samplekeytab";
+    const char * keytab_name = "/data0/rdkafka/krb5samplekeytab.keytab";
+    const char * service_name = "kafka/bjhc-storm-medusa-16627.jd.com";
+    int stage = 0;
+
+    memset(&creds, 0, sizeof(creds));
+    krb5_init_context(&context);
+
+    switch(stage) {
+        /* Configure */
+        default:
+            stage = 0;
+        case 0:
+            if((ret = krb5_cc_default(context, &ccache)))
+                break;
+            stage++;
+        case 1:
+            if((ret = krb5_parse_name_flags(context, princ_name, 0, &principal)))
+                break;
+            stage++;
+        case 2:
+            if((ret = krb5_get_init_creds_opt_alloc(context, &options)))
+                break;
+            stage++;
+        case 3:
+            if((ret = krb5_get_init_creds_opt_set_out_ccache(context, options, ccache)))
+                break;
+            stage++;
+        case 4:
+            if((ret = krb5_kt_resolve(context, keytab_name, &keytab)))
+                break;
+            stage++;
+            /* Connect */
+        case 5:
+            if((ret = krb5_get_init_creds_keytab(context, &creds, principal, keytab,
+                                                   0, service_name, options)))
+                break;
+            stage++;
+        case 6:
+            if((ret = krb5_verify_init_creds(context, &creds, NULL, NULL, NULL, NULL)))
+                break;
+            stage++;
+        case 7:
+            if(krb5_cc_switch(context, ccache))
+                break;
+            stage++;
+    }
+
+    rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
+               "stage = %d, error code = %d", stage, ret);
+
+    if(options) krb5_get_init_creds_opt_free(context, options);
+    if(creds.client == principal) creds.client = 0;
+    krb5_free_principal(context, principal);
+    krb5_free_cred_contents(context, &creds);
+    krb5_cc_close(context, ccache);
+    krb5_kt_close(context, keytab);
+    krb5_free_context(context);
+
+    return 0;
+}
+
+/**
  * Execute kinit to refresh ticket.
  *
  * Returns 0 on success, -1 on error.
@@ -242,7 +317,7 @@ static int rd_kafka_krb5_tgt_refresh(rd_kafka_broker_t *rkb) {
 static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
 
         mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
-        rd_kafka_krb5_tgt_refresh(rkb);
+        rd_kafka_krb5_tgt_refresh_password(rkb);
         mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
 
         rd_rkb_dbg(rkb, SECURITY, "SASLREFRESH", "SASL key refreshed");
