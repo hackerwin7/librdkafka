@@ -179,13 +179,18 @@ static void rd_kafka_krb5_conf_get_retrieve(rd_kafka_broker_t *rkb, int *use_cmd
                                            char *princ_name, char *princ_password, char *keytab) {
         char dest[1024];
         size_t destsize = sizeof(dest);
-        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.use.cmd", dest, &destsize);
+        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.use.cmd", dest, &destsize); // destsize has changed, note it
         *use_cmd = strcmp(dest, "true") == 0 ? 1 : 0;
+		destsize = sizeof(dest);
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.use.keytab", dest, &destsize);
         *use_keytab = strcmp(dest, "true") == 0 ? 1 : 0;
+		destsize = sizeof(dest);
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.service.name", service_name, &destsize);
+		destsize = sizeof(dest);
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.principal", princ_name, &destsize);
+		destsize = sizeof(dest);
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.principal.password", princ_password, &destsize);
+		destsize = sizeof(dest);
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.keytab", keytab, &destsize);
 }
 
