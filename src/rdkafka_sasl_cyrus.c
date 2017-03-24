@@ -39,6 +39,9 @@
 
 #include <sasl/sasl.h>
 
+#define LEN 1024
+#define SLEN 512
+
 static mtx_t rd_kafka_sasl_cyrus_kinit_lock;
 
 struct rd_kafka_sasl_state_s {
@@ -195,7 +198,7 @@ static void rd_kafka_krb5_conf_get_retrieve(rd_kafka_broker_t *rkb, int *use_cmd
 }
 
 static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *use_keytab, char *service_name,
-                                 char *princ_name, char *princ_password, char *keytab) {
+                                 char *princ_name, char *princ_password, char *keytab, char * brokername) {
         rd_kafka_conf_t conf = rkb->rkb_rk->rk_conf;
         *use_cmd = strcmp(conf.sasl.usecmd, "true") == 0 ? 1 : 0;
         *use_keytab = strcmp(conf.sasl.usekeytab, "true") == 0 ? 1 : 0;
@@ -203,6 +206,17 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 		strcpy(princ_name, conf.sasl.principal);
 		strcpy(princ_password, conf.sasl.princ_password);
         strcpy(keytab, conf.sasl.keytab);
+
+        char *broker, *t;
+        size_t len;
+        rd_kafka_broker_lock(rkb);
+        rd_strdupa(&broker, rkb->rkb_nodename);
+        rd_kafka_broker_unlock(rkb);
+        if((t = strchr(broker, ':'))) len = (size_t)(t - broker);
+        else len = strlen(broker);
+        memcpy(brokername, broker, len);
+        brokername[len] = '\0';
+        //todo need to free the broker ???
 }
 
 /**
@@ -210,18 +224,21 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
  *
  * Returns 0 on success, not 0 on error
  */
-static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb) {
+static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char * princ_name,
+                                              const char * password, const char * service, const char * brokername) {
         krb5_error_code ret = 0;
         krb5_creds creds;
         krb5_principal principal = NULL;
         krb5_context context;
         krb5_ccache ccache = NULL;
         krb5_get_init_creds_opt * options = NULL;
-        const char * princ_name = "krb5sample@YM.GSLB.QIANXUN.COM";
-        const char * password = "krb5sam";
-        const char * service_name = "kafka/localhost";
+        char service_name[SLEN];
         int stage = 0;
 
+        strcpy(service_name, service);
+        strcpy(service_name + strlen(service), "/");
+        strcpy(service_name + strlen(service) + 1, brokername);
+        service_name[strlen(service) + strlen(brokername) + 1] = '\0';
         memset(&creds, 0, sizeof(creds));
         krb5_init_context(&context);
 
@@ -279,23 +296,26 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb) {
  *
  * Returns 0 on success, not 0 on error
  */
-static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
-    krb5_error_code ret = 0;
-    krb5_creds creds;
-    krb5_principal principal = NULL;
-    krb5_context context;
-    krb5_ccache ccache = NULL;
-    krb5_keytab keytab = 0;
-    krb5_get_init_creds_opt * options = NULL;
-    const char * princ_name = "krb5samplekeytab";
-    const char * keytab_name = "/data0/servers/krb5samplekeytab.keytab";
-    const char * service_name = "kafka/bjhc-storm-medusa-16627.jd.com";
-    int stage = 0;
+static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char * princ_name,
+                                            const char * keytab_name, const char * service, const char * brokername) {
+        krb5_error_code ret = 0;
+        krb5_creds creds;
+        krb5_principal principal = NULL;
+        krb5_context context;
+        krb5_ccache ccache = NULL;
+        krb5_keytab keytab = 0;
+        krb5_get_init_creds_opt * options = NULL;
+        char servicename[SLEN];
+        int stage = 0;
 
-    memset(&creds, 0, sizeof(creds));
-    krb5_init_context(&context);
+        strcpy(servicename, service);
+        strcpy(servicename + strlen(service), "/");
+        strcpy(servicename + strlen(service) + 1, brokername);
+        servicename[strlen(service) + strlen(brokername) + 1] = '\0';
+        memset(&creds, 0, sizeof(creds));
+        krb5_init_context(&context);
 
-    switch(stage) {
+        switch(stage) {
         /* Configure */
         default:
             stage = 0;
@@ -322,7 +342,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
             /* Connect */
         case 5:
             if((ret = krb5_get_init_creds_keytab(context, &creds, principal, keytab,
-                                                   0, service_name, options)))
+                                                   0, servicename, options)))
                 break;
             stage++;
         case 6:
@@ -333,48 +353,19 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
             if(krb5_cc_switch(context, ccache))
                 break;
             stage++;
-    }
+        }
 
-    rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
+        rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
                "stage = %d, error code = %"PRId32"", stage, ret);
 
-    if(options) krb5_get_init_creds_opt_free(context, options);
-    if(creds.client == principal) creds.client = 0;
-    krb5_free_principal(context, principal);
-    krb5_free_cred_contents(context, &creds);
-    krb5_cc_close(context, ccache);
-    krb5_kt_close(context, keytab);
-    krb5_free_context(context);
+        if(options) krb5_get_init_creds_opt_free(context, options);
+        if(creds.client == principal) creds.client = 0;
+        krb5_free_principal(context, principal);
+        krb5_free_cred_contents(context, &creds);
+        krb5_cc_close(context, ccache);
+        krb5_kt_close(context, keytab);
+        krb5_free_context(context);
 
-    return 0;
-}
-
-#define LEN 1024
-#define SLEN 512
-/**
- * Execute kinit to refresh ticket.
- *
- * Returns 0 on success, -1 on error.
- *
- * Locality: any
- */
-static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
-
-        //debug
-        int usecmd, usekeytab;
-        char service[SLEN], principal[SLEN], password[SLEN], keytab[LEN];
-        rd_kafka_krb5_conf_get_retrieve(rkb, &usecmd, &usekeytab, service, principal, password, keytab);
-        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
-                "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s", usecmd, usekeytab, service, principal, password, keytab);
-        rd_kafka_krb5_conf_get(rkb, &usecmd, &usekeytab, service, principal, password, keytab);
-        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
-                   "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s", usecmd, usekeytab, service, principal, password, keytab);
-
-        mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
-        rd_kafka_krb5_tgt_refresh_keytab(rkb);
-        mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
-
-        rd_rkb_dbg(rkb, SECURITY, "SASLREFRESH", "SASL key refreshed");
         return 0;
 }
 
@@ -385,7 +376,7 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
  *
  * Locality: any
  */
-static int rd_kafka_sasl_cyrus_kinit_refresh_backup (rd_kafka_broker_t *rkb) {
+static int rd_kafka_sasl_cyrus_kinit_refresh_cmd(rd_kafka_broker_t *rkb) {
         rd_kafka_t *rk = rkb->rkb_rk;
         int r;
         char *cmd;
@@ -436,6 +427,61 @@ static int rd_kafka_sasl_cyrus_kinit_refresh_backup (rd_kafka_broker_t *rkb) {
         }
 
         rd_free(cmd);
+
+        rd_rkb_dbg(rkb, SECURITY, "SASLREFRESH", "SASL key refreshed");
+        return 0;
+}
+
+/**
+ * Different strategies to refresh the kerberos tgt
+ *
+ * Locality: any
+ */
+static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
+
+//        //debug
+//        int usecmd, usekeytab;
+//        char service[SLEN], principal[SLEN], password[SLEN], keytab[LEN];
+//        rd_kafka_krb5_conf_get_retrieve(rkb, &usecmd, &usekeytab, service, principal, password, keytab);
+//        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
+//                "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s", usecmd, usekeytab, service, principal, password, keytab);
+//        rd_kafka_krb5_conf_get(rkb, &usecmd, &usekeytab, service, principal, password, keytab);
+//        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
+//                   "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s", usecmd, usekeytab, service, principal, password, keytab);
+
+
+        /* configure the kerberos tgt refresh strategies/mode */
+        /* mode 0:cmd, 1:no-cmd keytab, 2:no-cmd password */
+        int mode = -1;
+        int usecmd, usekeytab;
+        char service[SLEN], principal[SLEN], password[SLEN], keytab[LEN], brokername[SLEN];
+        rd_kafka_krb5_conf_get(rkb, &usecmd, &usekeytab, service, principal, password, keytab, brokername);
+        if(!usecmd) {
+                if(!usekeytab) mode = 2;
+                else mode = 1;
+        } else {
+                mode = 0;
+        }
+
+        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
+                   "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s, broker = %s",
+                   usecmd, usekeytab, service, principal, password, keytab, brokername);
+
+        switch (mode) {
+                case 0:
+                        rd_kafka_sasl_cyrus_kinit_refresh_cmd(rkb);
+                        break;
+                case 1:
+                        mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
+                        rd_kafka_krb5_tgt_refresh_keytab(rkb, principal, keytab, service, brokername);
+                        mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
+                        break;
+                case 2:
+                        mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
+                        rd_kafka_krb5_tgt_refresh_password(rkb, principal, password, service, brokername);
+                        mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
+                        break;
+        }
 
         rd_rkb_dbg(rkb, SECURITY, "SASLREFRESH", "SASL key refreshed");
         return 0;
@@ -657,7 +703,7 @@ int rd_kafka_sasl_cyrus_client_new (rd_kafka_transport_t *rktrans,
                 callbacks[endidx].id = SASL_CB_LIST_END;
         }
 
-        /* Acquire or refresh ticket if kinit is configured */ 
+        /* Acquire or refresh ticket if kinit is configured */
         rd_kafka_sasl_cyrus_kinit_refresh(rkb);
 
         r = sasl_client_new(rk->rk_conf.sasl.service_name, hostname,
