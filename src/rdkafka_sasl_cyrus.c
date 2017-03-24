@@ -344,7 +344,8 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
     return 0;
 }
 
-#define LEN 128
+#define LEN 1024
+#define SLEN 512
 /**
  * Execute kinit to refresh ticket.
  *
@@ -356,7 +357,7 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
 
         //debug
         int usecmd, usekeytab;
-        char service[LEN], principal[LEN], password[LEN], keytab[LEN];
+        char service[SLEN], principal[SLEN], password[SLEN], keytab[LEN];
         rd_kafka_krb5_conf_get_retrieve(rkb, &usecmd, &usekeytab, service, principal, password, keytab);
         rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
                 "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s", usecmd, usekeytab, service, principal, password, keytab);
