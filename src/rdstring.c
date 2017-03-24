@@ -82,10 +82,10 @@ char *rd_string_render (const char *template,
 			 *        ^^^ */
 			size_t len = (size_t)((t ? t : tend)-s);
 			if (len)
-				_do_write(s, len);
+				_do_write(s, len); // the previous "%" len bytes write to buf and of move to the s:len end (next start position)
 		}
 
-		if (t) {
+		if (t) { // replace the "%{key}" to "value"
 			const char *te;
 			ssize_t r;
 			char *tmpkey;
@@ -102,10 +102,10 @@ char *rd_string_render (const char *template,
 				return NULL;
 			}
 
-			rd_strndupa(&tmpkey, t+2, (int)(te-t-2));
+			rd_strndupa(&tmpkey, t+2, (int)(te-t-2)); // te-t-2 is key's len, &tmpkey avoid value transfer's side effect in the function
 
 			/* Query callback for length of key's value. */
-			r = callback(tmpkey, NULL, 0, opaque);
+			r = callback(tmpkey, NULL, 0, opaque); // tmpkey is key string
 			if (r == -1) {
 				rd_snprintf(errstr, errstr_size,
 					    "Property not available: \"%s\"",

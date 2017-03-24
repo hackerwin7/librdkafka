@@ -809,16 +809,22 @@ rd_kafka_anyconf_set_prop0 (int scope, void *conf,
 			    const char *istr, int ival, prop_set_mode_t set_mode,
                             char *errstr, size_t errstr_size) {
 
-#define _RK_PTR(TYPE,BASE,OFFSET)  (TYPE)(((char *)(BASE))+(OFFSET))
+#define _RK_PTR(TYPE,BASE,OFFSET)  (TYPE)(((char *)(BASE))+(OFFSET)) // all offset is basic char step size
 	switch (prop->type)
 	{
 	case _RK_C_STR:
 	{
-		char **str = _RK_PTR(char **, conf, prop->offset);
+		char **str = _RK_PTR(char **, conf, prop->offset); // because you can not
+		// use the conf->prop = string value, so use the char ** style to set the config property value,
+		// you can use the *str = value,
+		// offset is accurate to minimal config property string to the rk->conf;
+		// char * -> void *-> rk_conf_s *-> conf pointer
+		// conf pointer + offset -> move the pointer to point the accurate member of conf
+		// because char * is a conf struct pointer so, the forced convert char ** is conf struct pointer, * (char **) is conf member, ** (char **) is conf struct
 		if (*str)
 			rd_free(*str);
 		if (istr)
-			*str = rd_strdup(istr);
+			*str = rd_strdup(istr); // *str's type is char * (a string type), and *str is string type to point the position of member of conf struct
 		else
 			*str = prop->sdef ? rd_strdup(prop->sdef) : NULL;
 		return RD_KAFKA_CONF_OK;
@@ -826,9 +832,9 @@ rd_kafka_anyconf_set_prop0 (int scope, void *conf,
         case _RK_C_KSTR:
         {
                 rd_kafkap_str_t **kstr = _RK_PTR(rd_kafkap_str_t **, conf,
-                                                 prop->offset);
+                                                 prop->offset); // type determine a step size of offset to move forward
                 if (*kstr)
-                        rd_kafkap_str_destroy(*kstr);
+                        rd_kafkap_str_destroy(*kstr); // free the old memory value
                 if (istr)
                         *kstr = rd_kafkap_str_new(istr, -1);
                 else
@@ -844,7 +850,7 @@ rd_kafka_anyconf_set_prop0 (int scope, void *conf,
 	case _RK_C_S2I:
 	case _RK_C_S2F:
 	{
-		int *val = _RK_PTR(int *, conf, prop->offset);
+		int *val = _RK_PTR(int *, conf, prop->offset); // integer type, so use int *
 
 		if (prop->type == _RK_C_S2F) {
 			switch (set_mode)
