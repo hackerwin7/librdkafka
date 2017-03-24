@@ -220,7 +220,7 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb) {
         }
 
         rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
-                        "stage = %d, error code = %d", stage, ret);
+               "stage = %d, error code = %"PRId32"d", stage, ret);
 
         if(options) krb5_get_init_creds_opt_free(context, options);
         if(creds.client == principal) creds.client = 0;
@@ -294,7 +294,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
     }
 
     rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
-               "stage = %d, error code = %d", stage, ret);
+               "stage = %d, error code = %"PRId32"d", stage, ret);
 
     if(options) krb5_get_init_creds_opt_free(context, options);
     if(creds.client == principal) creds.client = 0;
@@ -317,7 +317,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
 static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
 
         mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
-        rd_kafka_krb5_tgt_refresh_password(rkb);
+        rd_kafka_krb5_tgt_refresh_keytab(rkb);
         mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
 
         rd_rkb_dbg(rkb, SECURITY, "SASLREFRESH", "SASL key refreshed");
