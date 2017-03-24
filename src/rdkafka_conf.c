@@ -441,6 +441,19 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	 "**NOTE**: Despite the name only one mechanism must be configured.",
 	 .sdef = "GSSAPI",
 	 .validate = rd_kafka_conf_validate_single },
+	{ _RK_GLOBAL, "sasl.kerberos.use.cmd", _RK_C_STR,
+	  _RK(sasl.usecmd),
+	  "Whether use the kerberos cmd."
+	  "Value: true or false."
+	  "if set true, you need to install the kerberos command lib or packages."
+	  "kerberos cmd only support the keytab authentication",
+	  .sdef = "false" },
+	{ _RK_GLOBAL, "sasl.kerberos.use.keytab", _RK_C_STR,
+	  _RK(sasl.usekeytab),
+	  "Whether use the kerberos keytab as the authentication."
+	  "If set false, you must set the value for the %{sasl.kerberos.principal.password}."
+	  "If set true, you must set the value for the %{sasl.kerberos.keytab}.",
+	  .sdef = "true" },
 	{ _RK_GLOBAL, "sasl.kerberos.service.name", _RK_C_STR,
 	  _RK(sasl.service_name),
 	  "Kerberos principal name that Kafka runs as.",
@@ -449,6 +462,10 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	  _RK(sasl.principal),
 	  "This client's Kerberos principal name.",
 	  .sdef = "kafkaclient" },
+	{ _RK_GLOBAL, "sasl.kerberos.principal.password", _RK_C_STR,
+	  _RK(sasl.princ_password),
+	  "This client's Kerberos principal password which correspond principal name.",
+	  .sdef = "" },
 #ifndef _MSC_VER
 	{ _RK_GLOBAL, "sasl.kerberos.kinit.cmd", _RK_C_STR,
 	  _RK(sasl.kinit_cmd),

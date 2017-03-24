@@ -31,6 +31,7 @@
 #include "rdkafka_transport_int.h"
 #include "rdkafka_sasl.h"
 #include "rdkafka_sasl_int.h"
+#include "rdkafka_conf.h"
 
 #ifdef __FreeBSD__
 #include <sys/wait.h>  /* For WIF.. */
@@ -161,6 +162,42 @@ static ssize_t render_callback (const char *key, char *buf,
                 /* Dont include \0 in returned size */
                 return (destsize > 0 ? destsize-1 : destsize);
         }
+}
+
+/**
+ * all the args are pre-allocated in default. no memory allocate in this function
+ * @param rkb
+ * @param use_cmd
+ * @param use_keytab
+ * @param service_name
+ * @param princ_name
+ * @param princ_password
+ * @param keytab
+ * @return
+ */
+static void rd_kafka_krb5_conf_get_retrieve(rd_kafka_broker_t *rkb, int *use_cmd, int *use_keytab, char *service_name,
+                                           char *princ_name, char *princ_password, char *keytab) {
+        char dest[512];
+        size_t destsize = sizeof(dest);
+        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.use.cmd", dest, &destsize);
+        *use_cmd = strcmp(dest, "true") == 0 ? 1 : 0;
+        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.use.keytab", dest, &destsize);
+        *use_keytab = strcmp(dest, "true") == 0 ? 1 : 0;
+        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.service.name", service_name, &destsize);
+        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.principal", princ_name, &destsize);
+        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.principal.password", princ_password, &destsize);
+        rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.keytab", keytab, &destsize);
+}
+
+static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *use_keytab, char *service_name,
+                                 char *princ_name, char *princ_password, char *keytab) {
+        rd_kafka_conf_t conf = rkb->rkb_rk->rk_conf;
+        *use_cmd = strcmp(conf.sasl.usecmd, "true") == 0 ? 1 : 0;
+        *use_keytab = strcmp(conf.sasl.usekeytab, "true") == 0 ? 1 : 0;
+        memcpy(service_name, conf.sasl.service_name, sizeof(conf.sasl.service_name));
+        memcpy(princ_name, conf.sasl.principal, sizeof(conf.sasl.principal));
+        memcpy(princ_password, conf.sasl.princ_password, sizeof(conf.sasl.princ_password));
+        memcpy(keytab, conf.sasl.keytab, sizeof(conf.sasl.keytab));
 }
 
 /**
@@ -307,6 +344,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
     return 0;
 }
 
+#define LEN 128
 /**
  * Execute kinit to refresh ticket.
  *
@@ -315,6 +353,16 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb) {
  * Locality: any
  */
 static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
+
+        //debug
+        int usecmd, usekeytab;
+        char service[LEN], principal[LEN], password[LEN], keytab[LEN];
+        rd_kafka_krb5_conf_get_retrieve(rkb, &usecmd, &usekeytab, service, principal, password, keytab);
+        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
+                "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s", usecmd, usekeytab, service, principal, password, keytab);
+        rd_kafka_krb5_conf_get(rkb, &usecmd, &usekeytab, service, principal, password, keytab);
+        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
+                   "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s", usecmd, usekeytab, service, principal, password, keytab);
 
         mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
         rd_kafka_krb5_tgt_refresh_keytab(rkb);

@@ -103,7 +103,10 @@ struct rd_kafka_conf_s {
 
 #if WITH_SASL
 	struct {
+		char *usecmd;
+		char *usekeytab;
 		char *principal;
+		char *princ_password;
 		char *mechanisms;
 		char *service_name;
 		char *kinit_cmd;
