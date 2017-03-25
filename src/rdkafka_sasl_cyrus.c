@@ -207,9 +207,8 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 		strcpy(princ_password, conf.sasl.princ_password);
         strcpy(keytab, conf.sasl.keytab);
 
+		/* use the broker node name as the default kerberos service hostname, if specific brokername not set */
 		if(!conf.sasl.specific_brokername) {
-			strcpy(brokername, conf.sasl.specific_brokername);
-		} else { // use the broker node name as the default kerberos service hostname
 			char *broker, *t;
 			size_t len;
 			rd_kafka_broker_lock(rkb);
@@ -219,6 +218,8 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 			else len = strlen(broker);
 			memcpy(brokername, broker, len);
 			brokername[len] = '\0';
+		} else {
+			strcpy(brokername, conf.sasl.specific_brokername);
 		}
 }
 
