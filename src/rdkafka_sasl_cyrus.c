@@ -207,16 +207,19 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 		strcpy(princ_password, conf.sasl.princ_password);
         strcpy(keytab, conf.sasl.keytab);
 
-        char *broker, *t;
-        size_t len;
-        rd_kafka_broker_lock(rkb);
-        rd_strdupa(&broker, rkb->rkb_nodename);
-        rd_kafka_broker_unlock(rkb);
-        if((t = strchr(broker, ':'))) len = (size_t)(t - broker);
-        else len = strlen(broker);
-        memcpy(brokername, broker, len);
-        brokername[len] = '\0';
-        //todo need to free the broker ???
+		if(!conf.sasl.specific_brokername) {
+			strcpy(brokername, conf.sasl.specific_brokername);
+		} else { // use the broker node name as the default kerberos service hostname
+			char *broker, *t;
+			size_t len;
+			rd_kafka_broker_lock(rkb);
+			rd_strdupa(&broker, rkb->rkb_nodename); // alloca() don't need to free, and it freed when function returns.
+			rd_kafka_broker_unlock(rkb);
+			if((t = strchr(broker, ':'))) len = (size_t)(t - broker);
+			else len = strlen(broker);
+			memcpy(brokername, broker, len);
+			brokername[len] = '\0';
+		}
 }
 
 /**
@@ -451,7 +454,11 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
 
 
         /* configure the kerberos tgt refresh strategies/mode */
-        /* mode 0:cmd, 1:no-cmd keytab, 2:no-cmd password */
+        /* mode
+         * 0:cmd with keytab,
+         * 1:no-cmd with keytab,
+         * 2:no-cmd with password.
+         * */
         int mode = -1;
         int usecmd, usekeytab;
         char service[SLEN], principal[SLEN], password[SLEN], keytab[LEN], brokername[SLEN];

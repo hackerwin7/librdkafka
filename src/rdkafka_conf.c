@@ -458,6 +458,10 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	  _RK(sasl.service_name),
 	  "Kerberos principal name that Kafka runs as.",
 	  .sdef = "kafka" },
+	{ _RK_GLOBAL, "sasl.kerberos.service.hostname", _RK_C_STR,
+	  _RK(sasl.specific_brokername),
+	  "Specify the service hostname as the \"service/hostname\"."
+	  "If not set, we will use broker node name as the service hostname, such as IP address."},
 	{ _RK_GLOBAL, "sasl.kerberos.principal", _RK_C_STR,
 	  _RK(sasl.principal),
 	  "This client's Kerberos principal name.",

@@ -109,6 +109,7 @@ struct rd_kafka_conf_s {
 		char *princ_password;
 		char *mechanisms;
 		char *service_name;
+		char *specific_brokername;
 		char *kinit_cmd;
 		char *keytab;
 		int   relogin_min_time;
