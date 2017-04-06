@@ -453,7 +453,7 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	  "Whether use the kerberos keytab as the authentication."
 	  "If set false, you must set the value for the %{sasl.kerberos.principal.password}."
 	  "If set true, you must set the value for the %{sasl.kerberos.keytab}.",
-	  .sdef = "true" },
+	  .sdef = "false" },
 	{ _RK_GLOBAL, "sasl.kerberos.service.name", _RK_C_STR,
 	  _RK(sasl.service_name),
 	  "Kerberos principal name that Kafka runs as.",
