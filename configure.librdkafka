@@ -38,6 +38,10 @@ mkl_toggle_option "Feature" ENABLE_SASL "--enable-sasl" "Enable SASL support" "y
 
 function checks {
 
+    # kerberos libs
+    mkl_lib_check "libkrb5" "" fail CC "-lkrb5" \
+                  "#include <krb5.h>"
+
     # required libs
     mkl_lib_check "libpthread" "" fail CC "-lpthread" \
                   "#include <pthread.h>"
