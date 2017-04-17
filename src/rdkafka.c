@@ -34,6 +34,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <time.h>
 
 #include "rdkafka_int.h"
 #include "rdkafka_msg.h"
@@ -857,6 +858,149 @@ static RD_INLINE void rd_kafka_stats_emit_toppar (char **bufp, size_t *sizep,
 	*ofp = of;
 }
 
+#include <uuid/uuid.h>
+#include <ifaddrs.h>
+
+typedef struct rd_stats_cus_t {
+
+    /* common */
+    const unsigned char uuid[128];
+    pid_t pid;
+    char ip[64];
+    int version;
+    char client_id[1024];
+    int64_t starttime;
+    int64_t ts;
+    int emit_cnt; // begin form 1
+
+    /* producer */
+    int connection_count;
+    int64_t outgoing_byte_total;
+    int64_t outgoing_byte_total_w; // window state total (60s)
+    int64_t outgoing_byte_rate;
+    int64_t record_send_total; // message key/value pair total
+    int64_t record_send_total_w; // window state
+    int64_t record_send_rate;
+    int64_t record_err_total;
+    int64_t record_err_total_w;
+    int64_t record_err_rate;
+    int64_t request_send_total;
+    int64_t request_send_total_w;
+    int64_t request_send_rate;
+    int64_t request_send_latency_total; // microseconds
+    int64_t request_send_latency_total_w;
+    int64_t request_send_latency_rate;
+} rd_stats_cus, *rd_stats_cus_s;
+
+/**
+ * Emit custom and more diversities metrics than original
+ * @param rk
+ */
+static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
+    char *buf;
+    size_t size = 1024 * 10;
+    size_t of = 0;
+    rd_kafka_broker_t *rkb;
+    rd_kafka_topic_t *rkt;
+    shptr_rd_kafka_toppar_t *s_rktp;
+    rd_ts_t now;
+    rd_kafka_op_t *rko;
+    unsigned int tot_cnt;
+    size_t tot_size;
+    rd_stats_cus stats_cur;
+    static rd_stats_cus stats_prev;
+    static rd_kafka_t rk_t_prev;
+
+    buf = rd_malloc(size);
+
+    rd_kafka_curr_msgs_get(rk, &tot_cnt, &tot_size);
+
+	//common machine metrics
+	stats_cur.pid = getpid();
+	struct ifaddrs *addrs, *pt;
+	getifaddrs(&addrs);
+	pt = addrs;
+	while (pt) {
+		if(pt->ifa_addr && pt->ifa_addr->sa_family == AF_INET &&
+		   strcmp(pt->ifa_name, "lo") && !strstr(pt->ifa_name, "virbr")) {
+			strcpy(stats_cur.ip, inet_ntoa(((struct sockaddr_in *)pt->ifa_addr)->sin_addr));
+			break;
+		}
+		pt = pt->ifa_next;
+	}
+	freeifaddrs(addrs);
+	stats_cur.version = rd_kafka_version();
+    stats_cur.ts = (signed long long) time(NULL);
+    if(stats_prev.emit_cnt > 0)
+        stats_cur.emit_cnt = stats_prev.emit_cnt + 1;
+    else
+        stats_cur.emit_cnt = 1;
+
+    /* rk handler relation */
+    rd_kafka_rdlock(rk);
+    rd_atomic64_t total_sent_bytes; rd_atomic64_init(&total_sent_bytes, 0);
+    rd_atomic64_t total_sent_msgs; rd_atomic64_init(&total_sent_msgs, 0);
+    rd_atomic64_t total_sent_msgs_err; rd_atomic64_init(&total_sent_msgs_err, 0);
+    rd_atomic64_t total_sent_request; rd_atomic64_init(&total_sent_request, 0);
+    rd_atomic64_t total_sent_request_latency; rd_atomic64_init(&total_sent_request_latency, 0);
+
+    int conn_cnt = 0;
+
+    stats_cur.starttime = rd_atomic64_get(&rk->ctime);
+    strcpy(stats_cur.uuid, rk->uuid_s);
+    strcpy(stats_cur.client_id, rk->rk_conf.client_id_str);
+	TAILQ_FOREACH(rkb, &rk->rk_brokers, rkb_link) {
+		rd_kafka_toppar_t *rktp;
+		rd_kafka_broker_lock(rkb);
+        rd_atomic64_add(&total_sent_bytes, rd_atomic64_get(&rkb->rkb_c.tx_bytes)); // accumulate total sent bytes
+        rd_atomic64_add(&total_sent_msgs, rd_atomic64_get(&rkb->rkb_c.tx_msgs));
+        rd_atomic64_add(&total_sent_msgs_err, rd_atomic64_get(&rkb->rkb_c.tx_msgs_err));
+        rd_atomic64_add(&total_sent_request, rd_atomic64_get(&rkb->rkb_c.tx));
+        rd_atomic64_add(&total_sent_request_latency, rd_atomic64_get(&rkb->rkb_c.tx_request_latency));
+        /* exists prev stats */
+        if(stats_cur.emit_cnt > 1) {
+            /* connection count */
+            rd_kafka_broker_t *rkb_prev = NULL;
+            TAILQ_FOREACH(rkb_prev, &rk_t_prev.rk_brokers, rkb_link) {
+                if(!strcmp(rkb_prev->rkb_nodename, rkb->rkb_nodename))
+                    break;
+            }
+            if(rkb_prev &&
+                    rd_atomic64_get(&rkb->rkb_c.tx_bytes) >
+                            rd_atomic64_get(&rkb_prev->rkb_c.tx_bytes)) //find it
+                conn_cnt++;
+            else
+                if(rd_atomic64_get(&rkb->rkb_c.tx_bytes) > 0)
+                    conn_cnt++;
+        } else {
+            /* connection count */
+            if(rd_atomic64_get(&rkb->rkb_c.tx_bytes) > 0)
+                conn_cnt++;
+        }
+
+		rd_kafka_broker_unlock(rkb);
+	}
+    stats_cur.outgoing_byte_total = rd_atomic64_get(&total_sent_bytes);
+    stats_cur.outgoing_byte_total_w = stats_cur.outgoing_byte_total - stats_prev.outgoing_byte_total;
+    stats_cur.outgoing_byte_rate = stats_cur.outgoing_byte_total_w / 60;
+    stats_cur.record_send_total = rd_atomic64_get(&total_sent_msgs);
+    stats_cur.record_send_total_w = stats_cur.record_send_total - stats_prev.record_send_total;
+    stats_cur.record_send_rate = stats_cur.record_send_total_w / 60;
+    stats_cur.record_err_total = rd_atomic64_get(&total_sent_msgs_err);
+    stats_cur.record_err_total_w = stats_cur.record_err_total - stats_prev.record_err_total;
+    stats_cur.record_err_rate = stats_cur.record_err_total_w / 60;
+    stats_cur.request_send_total = rd_atomic64_get(&total_sent_request);
+    stats_cur.request_send_total_w = stats_cur.request_send_total - stats_prev.request_send_total;
+    stats_cur.request_send_rate = stats_cur.request_send_total_w / 60;
+    stats_cur.request_send_latency_total = rd_atomic64_get(&total_sent_request_latency);
+    stats_cur.request_send_latency_total_w = stats_cur.request_send_latency_total - stats_prev.request_send_latency_total;
+    stats_cur.request_send_latency_rate = stats_cur.request_send_latency_total_w / 60;
+	rd_kafka_rdunlock(rk);
+
+    memcpy(&stats_prev, &stats_cur, sizeof(rd_stats_cus)); // save into previous stats
+    memcpy(&rk_t_prev, rk, sizeof(rd_kafka_t));
+}
+
 /**
  * Emit all statistics
  */
@@ -1410,6 +1554,12 @@ rd_kafka_t *rd_kafka_new (rd_kafka_type_t type, rd_kafka_conf_t *conf,
         if (conf)
                 rd_kafka_conf_destroy(conf);
 	rd_kafka_set_last_error(0, 0);
+
+	/* custom rk handler member */
+    uuid_t uuid;
+    uuid_generate_random(uuid);
+	uuid_unparse(rk->uuid_s, uuid);
+	rk->ctime = (signed long long)time(NULL);
 
 	return rk;
 }

@@ -130,6 +130,11 @@ struct rd_kafka_broker_s { /* rd_kafka_broker_t */
 		rd_atomic64_t tx_retries;
 		rd_atomic64_t req_timeouts;  /* Accumulated value */
 
+		/* custom */
+        rd_atomic64_t tx_msgs; /* Total send payload msgs */
+        rd_atomic64_t tx_msgs_err; /* Total send payload msgs errors */
+        rd_atomic64_t tx_request_latency; /* Total request latency */
+
 		rd_atomic64_t rx_bytes;
 		rd_atomic64_t rx;    /* Kafka messages (not payload msgs) */
 		rd_atomic64_t rx_err;

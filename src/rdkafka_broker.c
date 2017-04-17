@@ -1007,6 +1007,9 @@ static rd_kafka_buf_t *rd_kafka_waitresp_find (rd_kafka_broker_t *rkb,
 			rkbuf->rkbuf_ts_sent = now - rkbuf->rkbuf_ts_sent;
 			rd_avg_add(&rkb->rkb_avg_rtt, rkbuf->rkbuf_ts_sent);
 
+            /* custom add request latency */
+            rd_atomic64_add(&rkb->rkb_c.tx_request_latency, rkbuf->rkbuf_ts_sent);
+
                         if (rkbuf->rkbuf_flags & RD_KAFKA_OP_F_BLOCKING &&
 			    rd_atomic32_sub(&rkb->rkb_blocking_request_cnt,
 					    1) == 1)
@@ -1718,10 +1721,17 @@ int rd_kafka_send (rd_kafka_broker_t *rkb) {
 			msghdr_print(rkb->rkb_rk, "SEND", msg, 1);
 		}
 
+		/* send socket here, msg is socket.h struct */
 		if ((r = rd_kafka_broker_send(rkb, msg)) == -1) {
+
+            /* send err */
+            rd_atomic64_add(&rkb->rkb_c.tx_msgs_err, rd_atomic32_get(&rkbuf->rkbuf_msgq.rkmq_msg_cnt));
 			/* FIXME: */
 			return -1;
 		}
+
+        /* send success */
+        rd_atomic64_add(&rkb->rkb_c.tx_msgs, rd_atomic32_get(&rkbuf->rkbuf_msgq.rkmq_msg_cnt));
 
 		rkbuf->rkbuf_of += r;
 
