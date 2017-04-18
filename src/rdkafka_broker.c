@@ -1008,7 +1008,7 @@ static rd_kafka_buf_t *rd_kafka_waitresp_find (rd_kafka_broker_t *rkb,
 			rd_avg_add(&rkb->rkb_avg_rtt, rkbuf->rkbuf_ts_sent);
 
             /* custom add request latency */
-            rd_atomic64_add(&rkb->rkb_c.tx_request_latency, rkbuf->rkbuf_ts_sent);
+			rd_avg_add(&rkb->rkb_c.reqp_latency, rkbuf->rkbuf_ts_sent);
 
                         if (rkbuf->rkbuf_flags & RD_KAFKA_OP_F_BLOCKING &&
 			    rd_atomic32_sub(&rkb->rkb_blocking_request_cnt,
@@ -2723,6 +2723,10 @@ static int rd_kafka_broker_produce_toppar (rd_kafka_broker_t *rkb,
 
 	/* Insert topic */
 	rd_kafka_buf_write_kstr(rkbuf, rkt->rkt_topic);
+
+    /* Custom add topic */
+    memcpy(rkbuf->rkbuf_topic, rkt->rkt_topic->str, (size_t)rkt->rkt_topic->len);
+    rkbuf->rkbuf_topic[rkt->rkt_topic->len] = '\0';
 
 	/*
 	 * Insert second part of Produce header

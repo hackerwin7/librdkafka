@@ -410,6 +410,9 @@ struct rd_kafka_buf_s { /* rd_kafka_buf_t */
 
                 } Metadata;
         } rkbuf_u;
+
+    /* custom metrics */
+    char rkbuf_topic[512];
 };
 
 

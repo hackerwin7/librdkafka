@@ -53,6 +53,8 @@
 #endif
 
 #include "rdtime.h"
+#include "rdavg.h"
+
 #ifdef _MSC_VER
 #include <sys/types.h>
 #include <sys/timeb.h>
@@ -861,6 +863,16 @@ static RD_INLINE void rd_kafka_stats_emit_toppar (char **bufp, size_t *sizep,
 #include <uuid/uuid.h>
 #include <ifaddrs.h>
 
+typedef struct rd_stats_topics_t {
+    char topic_name[128];
+    int64_t sent_bytes;
+    int64_t sent_bytes_w;
+    int64_t sent_bytes_rate;
+    int64_t sent_msgs;
+    int64_t sent_msgs_w;
+    int64_t sent_msgs_rate;
+} rd_stats_topics, *rd_stats_topics_s;
+
 typedef struct rd_stats_cus_t {
 
     /* common */
@@ -873,8 +885,9 @@ typedef struct rd_stats_cus_t {
     int64_t ts;
     int emit_cnt; // begin form 1
 
-    /* producer */
     int connection_count;
+
+    /* producer */
     int64_t outgoing_byte_total;
     int64_t outgoing_byte_total_w; // window state total (60s)
     int64_t outgoing_byte_rate;
@@ -884,12 +897,22 @@ typedef struct rd_stats_cus_t {
     int64_t record_err_total;
     int64_t record_err_total_w;
     int64_t record_err_rate;
+    rd_stats_topics topics[1024];
+    int topics_len;
+
+    /* producer/consumer */
     int64_t request_send_total;
     int64_t request_send_total_w;
     int64_t request_send_rate;
-    int64_t request_send_latency_total; // microseconds
-    int64_t request_send_latency_total_w;
-    int64_t request_send_latency_rate;
+    int64_t reqp_latency_avg;
+
+    /* consumer */
+    int64_t incoming_byte_total;
+    int64_t incoming_byte_total_w;
+    int64_t incoming_byte_rate;
+    int64_t incoming_msgs_total;
+    int64_t incoming_msgs_total_w;
+    int64_t incoming_msgs_rate;
 } rd_stats_cus, *rd_stats_cus_s;
 
 /**
@@ -901,7 +924,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     size_t size = 1024 * 10;
     size_t of = 0;
     rd_kafka_broker_t *rkb;
-    rd_kafka_topic_t *rkt;
+    rd_kafka_itopic_t *rkt;
     shptr_rd_kafka_toppar_t *s_rktp;
     rd_ts_t now;
     rd_kafka_op_t *rko;
@@ -942,13 +965,17 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     rd_atomic64_t total_sent_msgs; rd_atomic64_init(&total_sent_msgs, 0);
     rd_atomic64_t total_sent_msgs_err; rd_atomic64_init(&total_sent_msgs_err, 0);
     rd_atomic64_t total_sent_request; rd_atomic64_init(&total_sent_request, 0);
-    rd_atomic64_t total_sent_request_latency; rd_atomic64_init(&total_sent_request_latency, 0);
+    rd_atomic64_t total_request_latency; rd_atomic64_init(&total_request_latency, 0);
+    rd_atomic64_t total_recv_bytes; rd_atomic64_init(&total_recv_bytes, 0);
+    rd_atomic64_t total_recv_msgs; rd_atomic64_init(&total_recv_msgs, 0);
+    rd_avg_t reqp_latency;
 
     int conn_cnt = 0;
 
     stats_cur.starttime = rd_atomic64_get(&rk->ctime);
     strcpy(stats_cur.uuid, rk->uuid_s);
     strcpy(stats_cur.client_id, rk->rk_conf.client_id_str);
+    rd_avg_rollover(&reqp_latency, &rkb->rkb_c.reqp_latency);
 	TAILQ_FOREACH(rkb, &rk->rk_brokers, rkb_link) {
 		rd_kafka_toppar_t *rktp;
 		rd_kafka_broker_lock(rkb);
@@ -956,7 +983,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
         rd_atomic64_add(&total_sent_msgs, rd_atomic64_get(&rkb->rkb_c.tx_msgs));
         rd_atomic64_add(&total_sent_msgs_err, rd_atomic64_get(&rkb->rkb_c.tx_msgs_err));
         rd_atomic64_add(&total_sent_request, rd_atomic64_get(&rkb->rkb_c.tx));
-        rd_atomic64_add(&total_sent_request_latency, rd_atomic64_get(&rkb->rkb_c.tx_request_latency));
+        rd_atomic64_add(&total_recv_bytes, rd_atomic64_get(&rkb->rkb_c.rx_bytes));
         /* exists prev stats */
         if(stats_cur.emit_cnt > 1) {
             /* connection count */
@@ -992,10 +1019,66 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     stats_cur.request_send_total = rd_atomic64_get(&total_sent_request);
     stats_cur.request_send_total_w = stats_cur.request_send_total - stats_prev.request_send_total;
     stats_cur.request_send_rate = stats_cur.request_send_total_w / 60;
-    stats_cur.request_send_latency_total = rd_atomic64_get(&total_sent_request_latency);
-    stats_cur.request_send_latency_total_w = stats_cur.request_send_latency_total - stats_prev.request_send_latency_total;
-    stats_cur.request_send_latency_rate = stats_cur.request_send_latency_total_w / 60;
-	rd_kafka_rdunlock(rk);
+    stats_cur.incoming_byte_total = rd_atomic64_get(&total_recv_bytes);
+    stats_cur.incoming_byte_total_w = stats_cur.incoming_byte_total - stats_prev.incoming_byte_total;
+    stats_cur.incoming_byte_rate = stats_cur.incoming_byte_total_w / 60;
+    stats_cur.reqp_latency_avg = reqp_latency.ra_v.avg;
+
+    stats_cur.topics_len = 0;
+    TAILQ_FOREACH(rkt, &rk->rk_topics, rkt_link) {
+        rd_atomic64_t topic_total_sent_bytes; rd_atomic64_init(&topic_total_sent_bytes, 0);
+        rd_atomic64_t topic_total_sent_msgs; rd_atomic64_init(&topic_total_sent_msgs, 0);
+        rd_kafka_topic_rdlock(rkt);
+        memcpy(stats_cur.topics[stats_cur.topics_len].topic_name, rkt->rkt_topic->str, (size_t)rkt->rkt_topic->len);
+        stats_cur.topics[stats_cur.topics_len].topic_name[rkt->rkt_topic->len] = '\0';
+        for(int i = 0; i < rkt->rkt_partition_cnt; i++) {
+            rd_kafka_toppar_t *rktp = rd_kafka_toppar_s2i(rkt->rkt_p[i]);
+            rd_kafka_toppar_lock(rktp);
+            rd_atomic64_add(&topic_total_sent_bytes, rd_atomic64_get(&rktp->rktp_c.tx_bytes));
+            rd_atomic64_add(&topic_total_sent_msgs, rd_atomic64_get(&rktp->rktp_c.tx_msgs));
+            rd_atomic64_add(&total_recv_msgs, rd_atomic64_get(&rktp->rktp_c.msgs));
+            rd_kafka_toppar_unlock(rktp);
+        }
+        stats_cur.topics[stats_cur.topics_len].sent_bytes = rd_atomic64_get(&topic_total_sent_bytes);
+        stats_cur.topics[stats_cur.topics_len].sent_msgs = rd_atomic64_get(&topic_total_sent_msgs);
+        /* find previous same name topic, 128 is max topics length */
+        if(!strcmp(stats_cur.topics[stats_cur.topics_len].topic_name,
+                   stats_prev.topics[stats_prev.topics_len].topic_name)) {
+            stats_cur.topics[stats_cur.topics_len].sent_bytes_w =
+                    stats_cur.topics[stats_cur.topics_len].sent_bytes -
+                            stats_prev.topics[stats_cur.topics_len].sent_bytes;
+            stats_cur.topics[stats_cur.topics_len].sent_msgs_w =
+                    stats_cur.topics[stats_cur.topics_len].sent_msgs -
+                            stats_prev.topics[stats_cur.topics_len].sent_msgs;
+        } else {
+            int j = 0;
+            for(j = 0; j < stats_prev.topics_len; j++) {
+                if(!strcmp(stats_cur.topics[stats_cur.topics_len].topic_name,
+                           stats_prev.topics[j].topic_name))
+                    break;
+            }
+            if(j < stats_prev.topics_len) {// find it
+                stats_cur.topics[stats_cur.topics_len].sent_bytes_w =
+                        stats_cur.topics[stats_cur.topics_len].sent_bytes -
+                        stats_prev.topics[j].sent_bytes;
+                stats_cur.topics[stats_cur.topics_len].sent_msgs_w =
+                        stats_cur.topics[stats_cur.topics_len].sent_msgs -
+                                stats_prev.topics[j].sent_msgs;
+            } else {// new added topics
+                stats_cur.topics[stats_cur.topics_len].sent_bytes_w = stats_cur.topics[stats_cur.topics_len].sent_bytes;
+                stats_cur.topics[stats_cur.topics_len].sent_msgs_w = stats_cur.topics[stats_cur.topics_len].sent_msgs;
+            }
+        }
+        stats_cur.topics[stats_cur.topics_len].sent_bytes_rate = stats_cur.topics[stats_cur.topics_len].sent_bytes_w / 60;
+        stats_cur.topics[stats_cur.topics_len].sent_msgs_rate = stats_cur.topics[stats_cur.topics_len].sent_msgs_w / 60;
+        stats_cur.topics_len++;
+        stats_cur.incoming_msgs_total = rd_atomic64_get(&total_recv_msgs);
+        stats_cur.incoming_msgs_total_w = stats_cur.incoming_msgs_total - stats_prev.incoming_msgs_total;
+        stats_cur.incoming_msgs_rate = stats_cur.incoming_msgs_total_w / 60;
+        rd_kafka_topic_rdunlock(rkt);
+    }
+
+    rd_kafka_rdunlock(rk);
 
     memcpy(&stats_prev, &stats_cur, sizeof(rd_stats_cus)); // save into previous stats
     memcpy(&rk_t_prev, rk, sizeof(rd_kafka_t));
