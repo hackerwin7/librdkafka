@@ -4197,6 +4197,9 @@ rd_kafka_fetch_reply_handle (rd_kafka_broker_t *rkb,
 							last_offset + 1;
 					rd_atomic64_add(&rktp->rktp_c.msgs,
 							rd_kafka_q_len(&tmp_opq));
+                    /* Custom add msgs bytes */
+                    rd_atomic64_add(&rktp->rktp_c.msgs_bytes,
+                                    rd_kafka_q_size(&tmp_opq)); // exceed ???
 				}
                         } else {
                                 /* The message set didn't contain any full

@@ -247,6 +247,7 @@ struct rd_kafka_toppar_s { /* rd_kafka_toppar_t */
 		rd_atomic64_t tx_msgs;
 		rd_atomic64_t tx_bytes;
                 rd_atomic64_t msgs;
+                rd_atomic64_t msgs_bytes; /* Custom msgs bytes */
                 rd_atomic64_t rx_ver_drops;
 	} rktp_c;
 

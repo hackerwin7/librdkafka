@@ -193,7 +193,7 @@ struct rd_kafka_s {
 	thrd_t rk_thread;
 
     /* custom rk member especially for custom metrics */
-    const unsigned char uuid_s[128];
+	char uuid_s[128];
     rd_atomic64_t ctime;
 };
 
