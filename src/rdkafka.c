@@ -1149,6 +1149,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 
     /* Format and Output stats (json) by topic count */
 	char **bufs;
+    int bufs_len = stats_cur.topics_len;
 	for(int t = 0; t < stats_cur.topics_len; t++) {
 		char *buf;
 		size_t size = 1024 * 10;
@@ -1197,9 +1198,57 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 			/* producer topic metrics */
 			_st_printf(
 				"\"produceTopicMetrics\": { "
-			)
-		}
+                        "\"byte-rate\": %"PRId64", "
+                    "\"byte-total\": %"PRId64", "
+                    "\"record-send-rate\": %"PRId64", "
+                    "\"record-send-total\": %"PRId64" },",
+                stats_cur.topics[t].sent_bytes_rate,
+                stats_cur.topics[t].sent_bytes,
+                stats_cur.topics[t].sent_msgs_rate,
+                stats_cur.topics[t].sent_msgs);
+		} else { // consumer metrics
+            /* consumer common metrics */
+            _st_printf(
+                "\"consumeMetrics\": { "
+                        "\"connection-count\": %d, "
+                        "\"incoming-byte-rate\": %"PRId64", "
+                    "\"incoming-byte-total\": %"PRId64", "
+                    "\"request-rate\": %"PRId64" }, ",
+                stats_cur.connection_count,
+                stats_cur.incoming_byte_rate,
+                stats_cur.incoming_byte_total,
+                stats_cur.request_send_rate);
+            /* consumer fetch common metrics */
+            _st_printf(
+                "\"fetchmanagerMetrics\": { "
+                        "\"fetch-latency-avg\": %"PRId64", "
+                    "\"records-consumed-total\": %"PRId64" }, ",
+                stats_cur.reqp_latency_avg,
+                stats_cur.incoming_msgs_total);
+            /* consumer topic metrics */
+            _st_printf(
+                "\"fetchmanagerTopicMetrics\": { "
+                        "\"bytes-consumed-rate\": %"PRId64", "
+                    "\"bytes-consumed-total\": %"PRId64", "
+                    "\"records-consumed-rate\": %"PRId64", "
+                    "\"records-consumed-total\": %"PRId64" }, ",
+                stats_cur.topics[t].recv_bytes_rate,
+                stats_cur.topics[t].recv_bytes,
+                stats_cur.topics[t].recv_msgs_rate,
+                stats_cur.topics[t].recv_msgs);
+            /* consumer topic lag */
+            _st_printf(
+                "\"recordsLag\": { "
+                        "\"records-lag\": %"PRId64" }");
+        }
+        _st_printf("}");
+        bufs[t] = buf; // insert the bufs array
 	}
+
+    /* show the format */
+    for(int b = 0; b < bufs_len; b ++) {
+        printf("%d\n%s\n", b, bufs[b]);
+    }
 }
 
 /**
