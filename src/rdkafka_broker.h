@@ -133,7 +133,6 @@ struct rd_kafka_broker_s { /* rd_kafka_broker_t */
 		/* custom */
         rd_atomic64_t tx_msgs; /* Total send payload msgs */
         rd_atomic64_t tx_msgs_err; /* Total send payload msgs errors */
-        rd_avg_t reqp_latency; /* Request or Response latency stats */
 
 		rd_atomic64_t rx_bytes;
 		rd_atomic64_t rx;    /* Kafka messages (not payload msgs) */
@@ -169,6 +168,7 @@ struct rd_kafka_broker_s { /* rd_kafka_broker_t */
 	rd_avg_t            rkb_avg_int_latency;/* Current internal latency period*/
 	rd_avg_t            rkb_avg_rtt;        /* Current RTT period */
 	rd_avg_t            rkb_avg_throttle;   /* Current throttle period */
+    rd_avg_t            reqp_latency; /* Custom Request or Response latency stats */
 
         /* These are all protected by rkb_lock */
 	char                rkb_name[RD_KAFKA_NODENAME_SIZE];  /* Displ name */

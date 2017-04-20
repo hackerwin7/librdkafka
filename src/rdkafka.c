@@ -881,17 +881,22 @@ typedef struct rd_stats_topics_t {
     int64_t consume_lag; // all partition consume_lag sum
 } rd_stats_topics, *rd_stats_topics_s;
 
+/**
+ * custom new librdkafka metrics.
+ * it's compatible with java client metrics and also involve original original librdkafka metrics
+ */
 typedef struct rd_stats_cus_t {
 
     /* common */
 	char uuid[128];
     pid_t pid;
     char ip[64];
-    int version;
+    const char *version;
     char client_id[1024];
     int64_t starttime;
     int64_t ts;
     int emit_cnt; // begin form 1
+	char type[16];
 
     int connection_count;
 
@@ -928,9 +933,6 @@ typedef struct rd_stats_cus_t {
  * @param rk
  */
 static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
-    char *buf;
-    size_t size = 1024 * 10;
-    size_t of = 0;
     rd_kafka_broker_t *rkb;
     rd_kafka_itopic_t *rkt;
     shptr_rd_kafka_toppar_t *s_rktp;
@@ -938,8 +940,6 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     rd_stats_cus stats_cur;
     static rd_stats_cus stats_prev;
     static rd_kafka_t rk_t_prev;
-
-    buf = rd_malloc(size);
 
 	//common machine metrics
 	stats_cur.pid = getpid();
@@ -955,7 +955,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 		pt = pt->ifa_next;
 	}
 	freeifaddrs(addrs);
-	stats_cur.version = rd_kafka_version();
+	stats_cur.version = rd_kafka_version_str();
     stats_cur.ts = (signed long long) time(NULL);
     if(stats_prev.emit_cnt > 0)
         stats_cur.emit_cnt = stats_prev.emit_cnt + 1;
@@ -974,9 +974,10 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     int conn_cnt = 0;
 
     stats_cur.starttime = rd_atomic64_get(&rk->ctime);
+	strcpy(stats_cur.type, rd_kafka_type2str(rk->rk_type));
     strcpy(stats_cur.uuid, rk->uuid_s);
     strcpy(stats_cur.client_id, rk->rk_conf.client_id_str);
-    rd_avg_rollover(&reqp_latency, &rkb->rkb_c.reqp_latency);
+    rd_avg_rollover(&reqp_latency, &rkb->reqp_latency);
 	TAILQ_FOREACH(rkb, &rk->rk_brokers, rkb_link) {
 		rd_kafka_toppar_t *rktp;
 		rd_kafka_broker_lock(rkb);
@@ -1036,6 +1037,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
         rd_kafka_topic_rdlock(rkt);
         memcpy(stats_cur.topics[stats_cur.topics_len].topic_name, rkt->rkt_topic->str, (size_t)rkt->rkt_topic->len);
         stats_cur.topics[stats_cur.topics_len].topic_name[rkt->rkt_topic->len] = '\0';
+        /* Normal partitions */
         for(int i = 0; i < rkt->rkt_partition_cnt; i++) {
             rd_kafka_toppar_t *rktp = rd_kafka_toppar_s2i(rkt->rkt_p[i]);
             rd_kafka_toppar_lock(rktp);
@@ -1050,7 +1052,38 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 					rd_atomic64_add(&topic_total_consume_lag, offs.hi_offset - offs.fetch_offset);
             rd_kafka_toppar_unlock(rktp);
         }
-        //todo desired partition but not in rkt handler ????????
+        /* Desired partitions but not on the cluster */
+        int j = 0;
+        RD_LIST_FOREACH(s_rktp, &rkt->rkt_desp, j) {
+            rd_kafka_toppar_t *rktp = rd_kafka_toppar_s2i(s_rktp);
+            rd_kafka_toppar_lock(rktp);
+            rd_atomic64_add(&topic_total_sent_bytes, rd_atomic64_get(&rktp->rktp_c.tx_bytes));
+            rd_atomic64_add(&topic_total_sent_msgs, rd_atomic64_get(&rktp->rktp_c.tx_msgs));
+            rd_atomic64_add(&topic_total_recv_bytes, rd_atomic64_get(&rktp->rktp_c.msgs_bytes));
+            rd_atomic64_add(&topic_total_recv_msgs, rd_atomic64_get(&rktp->rktp_c.msgs));
+            /* Consume lag */
+            struct offset_stats offs = rktp->rktp_offsets_fin;
+            if(offs.hi_offset != RD_KAFKA_OFFSET_INVALID && offs.fetch_offset > 0)
+                if(offs.fetch_offset < offs.hi_offset)
+                    rd_atomic64_add(&topic_total_consume_lag, offs.hi_offset - offs.fetch_offset);
+            rd_kafka_toppar_unlock(rktp);
+        }
+        /* Unassigned partition */
+        if(rkt->rkt_ua) {
+            rd_kafka_toppar_t *rktp = rd_kafka_toppar_s2i(rkt->rkt_ua);
+            rd_kafka_toppar_lock(rktp);
+            rd_atomic64_add(&topic_total_sent_bytes, rd_atomic64_get(&rktp->rktp_c.tx_bytes));
+            rd_atomic64_add(&topic_total_sent_msgs, rd_atomic64_get(&rktp->rktp_c.tx_msgs));
+            rd_atomic64_add(&topic_total_recv_bytes, rd_atomic64_get(&rktp->rktp_c.msgs_bytes));
+            rd_atomic64_add(&topic_total_recv_msgs, rd_atomic64_get(&rktp->rktp_c.msgs));
+            /* Consume lag */
+            struct offset_stats offs = rktp->rktp_offsets_fin;
+            if(offs.hi_offset != RD_KAFKA_OFFSET_INVALID && offs.fetch_offset > 0)
+                if(offs.fetch_offset < offs.hi_offset)
+                    rd_atomic64_add(&topic_total_consume_lag, offs.hi_offset - offs.fetch_offset);
+            rd_kafka_toppar_unlock(rktp);
+        }
+        //todo the code of partition traverse is verbose
         stats_cur.topics[stats_cur.topics_len].sent_bytes = rd_atomic64_get(&topic_total_sent_bytes);
         stats_cur.topics[stats_cur.topics_len].sent_msgs = rd_atomic64_get(&topic_total_sent_msgs);
         stats_cur.topics[stats_cur.topics_len].recv_bytes = rd_atomic64_get(&topic_total_recv_bytes);
@@ -1113,6 +1146,60 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 
     memcpy(&stats_prev, &stats_cur, sizeof(rd_stats_cus)); // save into previous stats
     memcpy(&rk_t_prev, rk, sizeof(rd_kafka_t));
+
+    /* Format and Output stats (json) by topic count */
+	char **bufs;
+	for(int t = 0; t < stats_cur.topics_len; t++) {
+		char *buf;
+		size_t size = 1024 * 10;
+		size_t of = 0;
+		buf = rd_malloc(size);
+		/* common metrics */
+		_st_printf(
+			"{ "
+					"\"ip\": \"%s\", "
+					"\"pid\": \"%d\", "
+					"\"version\": \"%s\", "
+					"\"clientId\": \"%s\", "
+					"\"topic\": \"%s\", "
+					"\"uid\": \"%s\", "
+					"\"startime\": %"PRId64", "
+				"\"ts\": %"PRId64", "
+				"\"type\": %d, ",
+			stats_cur.ip,
+			stats_cur.pid,
+			stats_cur.version,
+			stats_cur.client_id,
+			stats_cur.topics[t].topic_name,
+			stats_cur.uuid,
+			stats_cur.starttime,
+			stats_cur.ts,
+			strcmp(stats_cur.type, "producer") == 0 ? 1 : 2);
+		/* producer metrics */
+		if(!strcmp(stats_cur.type, "producer")) {
+			/* producer common metrics */
+			_st_printf(
+					"\"produceMetrics\": { "
+							"\"outgoing-byte-total\": %"PRId64", "
+					"\"connection-count\": %d, "
+					"\"outgoing-byte-rate\": %"PRId64", "
+					"\"record-error-rate\": %"PRId64", "
+					"\"record-send-total\": %"PRId64", "
+					"\"request-latency-avg\": %"PRId64", "
+					"\"request-rate\": %"PRId64" },",
+					stats_cur.outgoing_byte_total,
+					stats_cur.connection_count,
+					stats_cur.outgoing_byte_rate,
+					stats_cur.record_err_rate,
+					stats_cur.record_send_total,
+					stats_cur.reqp_latency_avg,
+					stats_cur.request_send_rate);
+			/* producer topic metrics */
+			_st_printf(
+				"\"produceTopicMetrics\": { "
+			)
+		}
+	}
 }
 
 /**
