@@ -936,7 +936,6 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     rd_kafka_broker_t *rkb;
     rd_kafka_itopic_t *rkt;
     shptr_rd_kafka_toppar_t *s_rktp;
-    rd_ts_t now;
     rd_stats_cus stats_cur;
     static rd_stats_cus stats_prev;
     static rd_kafka_t rk_t_prev;
@@ -969,23 +968,22 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     rd_atomic64_t total_sent_msgs_err; rd_atomic64_init(&total_sent_msgs_err, 0);
     rd_atomic64_t total_sent_request; rd_atomic64_init(&total_sent_request, 0);
     rd_atomic64_t total_recv_bytes; rd_atomic64_init(&total_recv_bytes, 0);
-    rd_avg_t reqp_latency;
+    rd_atomic64_t total_latency_avg; rd_atomic64_init(&total_latency_avg, 0);
 
     int conn_cnt = 0;
 
-    stats_cur.starttime = rd_atomic64_get(&rk->ctime);
+    stats_cur.starttime = rk->ctime;
 	strcpy(stats_cur.type, rd_kafka_type2str(rk->rk_type));
     strcpy(stats_cur.uuid, rk->uuid_s);
     strcpy(stats_cur.client_id, rk->rk_conf.client_id_str);
-    rd_avg_rollover(&reqp_latency, &rkb->reqp_latency);
 	TAILQ_FOREACH(rkb, &rk->rk_brokers, rkb_link) {
-		rd_kafka_toppar_t *rktp;
 		rd_kafka_broker_lock(rkb);
         rd_atomic64_add(&total_sent_bytes, rd_atomic64_get(&rkb->rkb_c.tx_bytes)); // accumulate total sent bytes
         rd_atomic64_add(&total_sent_msgs, rd_atomic64_get(&rkb->rkb_c.tx_msgs));
         rd_atomic64_add(&total_sent_msgs_err, rd_atomic64_get(&rkb->rkb_c.tx_msgs_err));
         rd_atomic64_add(&total_sent_request, rd_atomic64_get(&rkb->rkb_c.tx));
         rd_atomic64_add(&total_recv_bytes, rd_atomic64_get(&rkb->rkb_c.rx_bytes));
+		rd_atomic64_add(&total_latency_avg, rkb->reqp_latency.ra_v.avg);
         /* exists prev stats */
         if(stats_cur.emit_cnt > 1) {
             /* connection count */
@@ -1024,7 +1022,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     stats_cur.incoming_byte_total = rd_atomic64_get(&total_recv_bytes);
     stats_cur.incoming_byte_total_w = stats_cur.incoming_byte_total - stats_prev.incoming_byte_total;
     stats_cur.incoming_byte_rate = stats_cur.incoming_byte_total_w / 60;
-    stats_cur.reqp_latency_avg = reqp_latency.ra_v.avg;
+    stats_cur.reqp_latency_avg = rd_atomic64_get(&total_latency_avg) / rd_atomic32_get(&rk->rk_broker_cnt);
 
     stats_cur.topics_len = 0;
     rd_atomic64_t total_recv_msgs; rd_atomic64_init(&total_recv_msgs, 0); // all topic partitions metrics sum
@@ -1148,13 +1146,13 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     memcpy(&rk_t_prev, rk, sizeof(rd_kafka_t));
 
     /* Format and Output stats (json) by topic count */
-	char **bufs;
+	char *bufs[128];
     int bufs_len = stats_cur.topics_len;
 	for(int t = 0; t < stats_cur.topics_len; t++) {
 		char *buf;
 		size_t size = 1024 * 10;
 		size_t of = 0;
-		buf = rd_malloc(size);
+		buf = rd_malloc(size); // todo how to free
 		/* common metrics */
 		_st_printf(
 			"{ "
@@ -1201,7 +1199,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
                         "\"byte-rate\": %"PRId64", "
                     "\"byte-total\": %"PRId64", "
                     "\"record-send-rate\": %"PRId64", "
-                    "\"record-send-total\": %"PRId64" },",
+                    "\"record-send-total\": %"PRId64" } ",
                 stats_cur.topics[t].sent_bytes_rate,
                 stats_cur.topics[t].sent_bytes,
                 stats_cur.topics[t].sent_msgs_rate,
@@ -1239,7 +1237,8 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
             /* consumer topic lag */
             _st_printf(
                 "\"recordsLag\": { "
-                        "\"records-lag\": %"PRId64" }");
+                        "\"records-lag\": %"PRId64" } ",
+                stats_cur.topics[t].consume_lag);
         }
         _st_printf("}");
         bufs[t] = buf; // insert the bufs array
@@ -1482,6 +1481,11 @@ static void rd_kafka_stats_emit_tmr_cb (rd_kafka_timers_t *rkts, void *arg) {
 	rd_kafka_stats_emit_all(rk);
 }
 
+static void rd_kafka_stats_emit_cus_tmr_cb(rd_kafka_timers_t *rkts, void *arg) {
+    rd_kafka_t *rk = rkts->rkts_rk;
+    rd_kafka_stats_emit_custom(rk);
+}
+
 
 /**
  * @brief Periodic metadata refresh callback
@@ -1515,6 +1519,7 @@ static int rd_kafka_thread_main (void *arg) {
 	rd_kafka_timer_t tmr_topic_scan = RD_ZERO_INIT;
 	rd_kafka_timer_t tmr_stats_emit = RD_ZERO_INIT;
 	rd_kafka_timer_t tmr_metadata_refresh = RD_ZERO_INIT;
+    rd_kafka_timer_t tmr_stats_emit_cus = RD_ZERO_INIT;
 
         rd_snprintf(rd_kafka_thread_name, sizeof(rd_kafka_thread_name), "main");
 
@@ -1530,6 +1535,9 @@ static int rd_kafka_thread_main (void *arg) {
 	rd_kafka_timer_start(&rk->rk_timers, &tmr_stats_emit,
 			     rk->rk_conf.stats_interval_ms * 1000ll,
 			     rd_kafka_stats_emit_tmr_cb, NULL);
+    /* custom stats emit, default is 60 seconds */
+    rd_kafka_timer_start(&rk->rk_timers, &tmr_stats_emit_cus,
+                         60 * 1000 * 1000, rd_kafka_stats_emit_cus_tmr_cb, NULL);
         if (rk->rk_conf.metadata_refresh_interval_ms > 0)
                 rd_kafka_timer_start(&rk->rk_timers, &tmr_metadata_refresh,
                                      rk->rk_conf.metadata_refresh_interval_ms *
@@ -1808,7 +1816,7 @@ rd_kafka_t *rd_kafka_new (rd_kafka_type_t type, rd_kafka_conf_t *conf,
 	/* custom rk handler member */
     uuid_t uuid; char uuid_str[128];
     uuid_generate_random(uuid);
-	uuid_unparse(uuid_str, uuid);
+	uuid_unparse(uuid, uuid_str);
 	int uuid_str_ind = 0, uuid_ind = 0;
 	while (uuid_str[uuid_str_ind] != '\0') {
 		if(uuid_str[uuid_str_ind] != '-') rk->uuid_s[uuid_ind++] = uuid_str[uuid_str_ind];

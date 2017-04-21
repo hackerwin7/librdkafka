@@ -194,7 +194,7 @@ struct rd_kafka_s {
 
     /* custom rk member especially for custom metrics */
 	char uuid_s[128];
-    rd_atomic64_t ctime;
+    int64_t ctime;
 };
 
 #define rd_kafka_wrlock(rk)    rwlock_wrlock(&(rk)->rk_lock)

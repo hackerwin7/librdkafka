@@ -177,7 +177,7 @@ static ssize_t render_callback (const char *key, char *buf,
  * @param princ_password
  * @param keytab
  * @return
- */
+ *//*
 static void rd_kafka_krb5_conf_get_retrieve(rd_kafka_broker_t *rkb, int *use_cmd, int *use_keytab, char *service_name,
                                            char *princ_name, char *princ_password, char *keytab) {
         char dest[1024];
@@ -195,7 +195,7 @@ static void rd_kafka_krb5_conf_get_retrieve(rd_kafka_broker_t *rkb, int *use_cmd
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.principal.password", princ_password, &destsize);
 		destsize = sizeof(dest);
         rd_kafka_conf_get(&rkb->rkb_rk->rk_conf, "sasl.kerberos.keytab", keytab, &destsize);
-}
+}*/
 
 static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *use_keytab, char *service_name,
                                  char *princ_name, char *princ_password, char *keytab, char * brokername) {
