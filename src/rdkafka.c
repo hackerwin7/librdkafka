@@ -860,6 +860,8 @@ static RD_INLINE void rd_kafka_stats_emit_toppar (char **bufp, size_t *sizep,
 	*ofp = of;
 }
 
+#include <curl/curl.h>
+#include <curl/easy.h>
 #include <uuid/uuid.h>
 #include <ifaddrs.h>
 
@@ -1146,8 +1148,6 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     memcpy(&rk_t_prev, rk, sizeof(rd_kafka_t));
 
     /* Format and Output stats (json) by topic count */
-	char *bufs[128];
-    int bufs_len = stats_cur.topics_len;
 	for(int t = 0; t < stats_cur.topics_len; t++) {
 		char *buf;
 		size_t size = 1024 * 10;
@@ -1241,13 +1241,34 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
                 stats_cur.topics[t].consume_lag);
         }
         _st_printf("}");
-        bufs[t] = buf; // insert the bufs array
-	}
 
-    /* show the format */
-    for(int b = 0; b < bufs_len; b ++) {
-        printf("%d\n%s\n", b, bufs[b]);
-    }
+        /* show the format buf string */
+        printf("%s\n", buf);
+
+        /* send metrics buf string by http */
+        CURL * curl;
+        CURLcode curl_res;
+        curl = curl_easy_init();
+        if(curl) {
+            struct curl_slist *headers = NULL;
+            headers = curl_slist_append(headers, "Content-type: application/octet-stream");
+            headers = curl_slist_append(headers, "Connection: Keep-Alive");
+            headers = curl_slist_append(headers, "Charset: UTF-8");
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            curl_easy_setopt(curl, CURLOPT_URL, "http://logbus.bdp.jd.com/log.gif");
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, buf);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 6000);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 6000);
+            curl_res = curl_easy_perform(curl);
+            if(curl_res != CURLE_OK)
+                fprintf(stderr, "curl easy perform failed: %s\n", curl_easy_strerror(curl_res));
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+        }
+
+        /* free */
+        free(buf);
+	}
 }
 
 /**

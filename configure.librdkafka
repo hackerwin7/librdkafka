@@ -38,6 +38,10 @@ mkl_toggle_option "Feature" ENABLE_SASL "--enable-sasl" "Enable SASL support" "y
 
 function checks {
 
+    # curl libs
+    mkl_lib_check "libcurl" "" fail CC "-lcurl" \
+                  "#inlude <curl/curl.h>"
+
     # uuid libs
     mkl_lib_check "libuuid" "" fail CC "-luuid" \
                   "#include <uuid/uuid.h>"
