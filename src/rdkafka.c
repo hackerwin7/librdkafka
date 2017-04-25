@@ -1038,7 +1038,8 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
         memcpy(stats_cur.topics[stats_cur.topics_len].topic_name, rkt->rkt_topic->str, (size_t)rkt->rkt_topic->len);
         stats_cur.topics[stats_cur.topics_len].topic_name[rkt->rkt_topic->len] = '\0';
         /* Normal partitions */
-        for(int i = 0; i < rkt->rkt_partition_cnt; i++) {
+        int i = 0;
+        for(i = 0; i < rkt->rkt_partition_cnt; i++) {
             rd_kafka_toppar_t *rktp = rd_kafka_toppar_s2i(rkt->rkt_p[i]);
             rd_kafka_toppar_lock(rktp);
             rd_atomic64_add(&topic_total_sent_bytes, rd_atomic64_get(&rktp->rktp_c.tx_bytes));
@@ -1053,8 +1054,8 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
             rd_kafka_toppar_unlock(rktp);
         }
         /* Desired partitions but not on the cluster */
-        int j = 0;
-        RD_LIST_FOREACH(s_rktp, &rkt->rkt_desp, j) {
+        int ii = 0;
+        RD_LIST_FOREACH(s_rktp, &rkt->rkt_desp, ii) {
             rd_kafka_toppar_t *rktp = rd_kafka_toppar_s2i(s_rktp);
             rd_kafka_toppar_lock(rktp);
             rd_atomic64_add(&topic_total_sent_bytes, rd_atomic64_get(&rktp->rktp_c.tx_bytes));
@@ -1148,7 +1149,8 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     memcpy(&rk_t_prev, rk, sizeof(rd_kafka_t));
 
     /* Format and Output stats (json) by topic count */
-	for(int t = 0; t < stats_cur.topics_len; t++) {
+	int t = 0;
+	for(t = 0; t < stats_cur.topics_len; t++) {
 		char *buf;
 		size_t size = 1024 * 10;
 		size_t of = 0;

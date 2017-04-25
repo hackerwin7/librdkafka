@@ -226,7 +226,7 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 
 /* kerboers custom profile lib
  * see detail in kerboers sources: profile.h, test_vtable.c prof_int.c*/
-#include "profile.h"
+#include <profile.h>
 
 static void free_values(void *cbdata, char **values) {
     char **v;
@@ -315,6 +315,42 @@ struct profile_vtable vtable = {
         free_values,
 };
 
+static int profile_init_vtable_static(struct profile_vtable *vtable, void *cbdata, profile_t *ret_profile) {
+    profile_t profile;
+    struct profile_vtable *vt_copy;
+
+    /* Check that the vtable's minor version is sane and that mandatory methods
+     * are implemented. */
+    if (vtable->minor_ver < 1 || !vtable->get_values || !vtable->free_values)
+        return EINVAL;
+    if (vtable->cleanup && !vtable->copy)
+        return EINVAL;
+    if (vtable->iterator_create &&
+        (!vtable->iterator || !vtable->iterator_free || !vtable->free_string))
+        return EINVAL;
+
+    profile = malloc(sizeof(*profile));
+    if (!profile)
+        return ENOMEM;
+    memset(profile, 0, sizeof(*profile));
+
+    vt_copy = malloc(sizeof(*vt_copy));
+    if (!vt_copy) {
+        free(profile);
+        return ENOMEM;
+    }
+    /* It's safe to just copy the caller's vtable for now.  If the minor
+     * version is bumped, we'll need to copy individual fields. */
+    *vt_copy = *vtable;
+
+    profile->vt = vt_copy;
+    profile->cbdata = cbdata;
+    profile->lib_handle = NULL;
+    profile->magic = PROF_MAGIC_PROFILE;
+    *ret_profile = profile;
+    return 0;
+}
+
 /**
  * load kerberos configuration (dynamic krb5.conf) to context profile
  */
@@ -322,7 +358,8 @@ static int rd_kafka_krb5_init_context_custom_profile(krb5_context *context) {
     /* init context profile */
     profile_t profile;
     int cbdata;
-    profile_init_vtable(&vtable, &cbdata, &profile);
+    profile_init_vtable_static(&vtable, &cbdata, &profile); // note: before krb5-libs 1.12.2, this function is inaccessible to the krb5-libs,
+                                                     // even though you link the libkrb5, it still throw the "undefined reference to `profile_init_vtable'"
     krb5_init_context_profile(profile, 0, context);
     profile_release(profile);
     return 0;
