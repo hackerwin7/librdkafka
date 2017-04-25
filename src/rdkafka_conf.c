@@ -454,6 +454,12 @@ static const struct rd_kafka_property rd_kafka_properties[] = {
 	  "If set false, you must set the value for the %{sasl.kerberos.principal.password}."
 	  "If set true, you must set the value for the %{sasl.kerberos.keytab}.",
 	  .sdef = "false" },
+    { _RK_GLOBAL, "sasl.kerberos.use.krb5conf", _RK_C_STR,
+      _RK(sasl.usekrb5conf),
+      "Whether or not use the krb5.conf file as the kerberos configuration."
+              "if set true, krb5 will load the conf with the $KRB5_CONFIG file info."
+              "if set false, we will load the configuration dynamically with the inner code.",
+      .sdef = "false" },
 	{ _RK_GLOBAL, "sasl.kerberos.service.name", _RK_C_STR,
 	  _RK(sasl.service_name),
 	  "Kerberos principal name that Kafka runs as.",

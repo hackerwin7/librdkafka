@@ -198,7 +198,7 @@ static void rd_kafka_krb5_conf_get_retrieve(rd_kafka_broker_t *rkb, int *use_cmd
 }*/
 
 static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *use_keytab, char *service_name,
-                                 char *princ_name, char *princ_password, char *keytab, char * brokername) {
+                                 char *princ_name, char *princ_password, char *keytab, char * brokername, int *usekrb5conf) {
         rd_kafka_conf_t conf = rkb->rkb_rk->rk_conf;
         *use_cmd = strcmp(conf.sasl.usecmd, "true") == 0 ? 1 : 0;
         *use_keytab = strcmp(conf.sasl.usekeytab, "true") == 0 ? 1 : 0;
@@ -206,6 +206,7 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 		strcpy(princ_name, conf.sasl.principal);
 		strcpy(princ_password, conf.sasl.princ_password);
         strcpy(keytab, conf.sasl.keytab);
+        *usekrb5conf = strcmp(conf.sasl.usekrb5conf, "true") == 0 ? 1 : 0;
 
 		/* use the broker node name as the default kerberos service hostname, if specific brokername not set */
 		if(!conf.sasl.specific_brokername) {
@@ -223,13 +224,117 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 		}
 }
 
+/* kerboers custom profile lib
+ * see detail in kerboers sources: profile.h, test_vtable.c prof_int.c*/
+#include "profile.h"
+
+static void free_values(void *cbdata, char **values) {
+    char **v;
+    for(v = values; *v; v++) {
+        free(*v);
+    }
+    free(values);
+}
+
+/**
+ * dynamic config info
+ * @param cbdata
+ * @param names
+ * @param ret_values
+ * @return
+ */
+static long get_values(void *cbdata, const char *const *names, char ***ret_values) {
+    if(names[0] == NULL)
+        return PROF_NO_RELATION;
+    if(!strcmp(names[0], "libdefaults")) {
+        *ret_values = calloc(2, sizeof(*ret_values));
+        if(!strcmp(names[1], "default_realm")) {
+            (*ret_values)[0] = strdup("BDP.JD.COM");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "dns_lookup_realm") ||
+                !strcmp(names[0], "dns_lookup_kdc") ||
+                !strcmp(names[0], "rdns")) {
+            (*ret_values)[0] = strdup("false");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "ticket_lifetime")) {
+            (*ret_values)[0] = strdup("24h");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "renew_lifetime")) {
+            (*ret_values)[0] = strdup("7d");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "forwardable")) {
+            (*ret_values)[0] = strdup("true");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "kdc_timeout")) {
+            (*ret_values)[0] = strdup("10000");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "max_retries")) {
+            (*ret_values)[0] = strdup("2");
+            (*ret_values)[1] = NULL;
+        } else {
+            free(*ret_values);
+            return PROF_NO_RELATION;
+        }
+    } else if(!strcmp(names[0], "realms")) {
+        if(!strcmp(names[1], "BDP.JD.COM")) {
+            *ret_values = calloc(2, sizeof(*ret_values));
+            if(!strcmp(names[2], "kdc")) {
+                (*ret_values)[0] = strdup("BJHC-JDQ-HUANGHE-7126.hadoop.jd.local");
+                (*ret_values)[1] = NULL;
+            } else if(!strcmp(names[2], "admin_server")) {
+                (*ret_values)[0] = strdup("BJHC-JDQ-HUANGHE-7126.hadoop.jd.local");
+                (*ret_values)[1] = NULL;
+            } else {
+                free(*ret_values);
+                return PROF_NO_RELATION;
+            }
+        } else {
+            return PROF_NO_RELATION;
+        }
+    } else if(!strcmp(names[0], "domain_realm")) {
+        *ret_values = calloc(2, sizeof(*ret_values));
+        if(!strcmp(names[1], ".hadoop.jd.local")) {
+            (*ret_values)[0] = strdup("BDP.JD.COM");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "hadoop.jd.local")) {
+            (*ret_values)[0] = strdup("BDP.JD.COM");
+            (*ret_values)[1] = NULL;
+        } else {
+            free(*ret_values);
+            return PROF_NO_RELATION;
+        }
+    } else {
+        return PROF_NO_RELATION;
+    }
+    return 0;
+}
+
+struct profile_vtable vtable = {
+        1,
+        get_values,
+        free_values,
+};
+
+/**
+ * load kerberos configuration (dynamic krb5.conf) to context profile
+ */
+static int rd_kafka_krb5_init_context_custom_profile(krb5_context *context) {
+    /* init context profile */
+    profile_t profile;
+    int cbdata;
+    profile_init_vtable(&vtable, &cbdata, &profile);
+    krb5_init_context_profile(profile, 0, context);
+    profile_release(profile);
+    return 0;
+}
+
 /**
  * Add a kerberos api block to refresh the ticket
  *
  * Returns 0 on success, not 0 on error
  */
 static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char * princ_name,
-                                              const char * password, const char * service, const char * brokername) {
+                                              const char * password, const char * service, const char * brokername, int usekrb5conf) {
         krb5_error_code ret = 0;
         krb5_creds creds;
         krb5_principal principal = NULL;
@@ -244,7 +349,10 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char
         strcpy(service_name + strlen(service) + 1, brokername);
         service_name[strlen(service) + strlen(brokername) + 1] = '\0';
         memset(&creds, 0, sizeof(creds));
-        krb5_init_context(&context);
+        if(usekrb5conf)
+            krb5_init_context(&context);
+        else
+            rd_kafka_krb5_init_context_custom_profile(&context);
 
         switch(stage) {
                 /* Configure */
@@ -301,7 +409,7 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char
  * Returns 0 on success, not 0 on error
  */
 static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char * princ_name,
-                                            const char * keytab_name, const char * service, const char * brokername) {
+                                            const char * keytab_name, const char * service, const char * brokername, int usekrb5conf) {
         krb5_error_code ret = 0;
         krb5_creds creds;
         krb5_principal principal = NULL;
@@ -317,7 +425,10 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char *
         strcpy(servicename + strlen(service) + 1, brokername);
         servicename[strlen(service) + strlen(brokername) + 1] = '\0';
         memset(&creds, 0, sizeof(creds));
-        krb5_init_context(&context);
+        if(usekrb5conf)
+            krb5_init_context(&context);
+        else
+            rd_kafka_krb5_init_context_custom_profile(&context);
 
         switch(stage) {
         /* Configure */
@@ -461,9 +572,9 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
          * 2:no-cmd with password.
          * */
         int mode = -1;
-        int usecmd, usekeytab;
+        int usecmd, usekeytab, usekrb5conf;
         char service[SLEN], principal[SLEN], password[SLEN], keytab[LEN], brokername[SLEN];
-        rd_kafka_krb5_conf_get(rkb, &usecmd, &usekeytab, service, principal, password, keytab, brokername);
+        rd_kafka_krb5_conf_get(rkb, &usecmd, &usekeytab, service, principal, password, keytab, brokername, &usekrb5conf);
         if(!usecmd) {
                 if(!usekeytab) mode = 2;
                 else mode = 1;
@@ -472,8 +583,8 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
         }
 
         rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
-                   "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s, broker = %s",
-                   usecmd, usekeytab, service, principal, password, keytab, brokername);
+                   "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s, broker = %s, use krb5.conf = %d",
+                   usecmd, usekeytab, service, principal, password, keytab, brokername, usekrb5conf);
 
         switch (mode) {
                 case 0:
@@ -481,12 +592,12 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
                         break;
                 case 1:
                         mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
-                        rd_kafka_krb5_tgt_refresh_keytab(rkb, principal, keytab, service, brokername);
+                        rd_kafka_krb5_tgt_refresh_keytab(rkb, principal, keytab, service, brokername, usekrb5conf);
                         mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
                         break;
                 case 2:
                         mtx_lock(&rd_kafka_sasl_cyrus_kinit_lock);
-                        rd_kafka_krb5_tgt_refresh_password(rkb, principal, password, service, brokername);
+                        rd_kafka_krb5_tgt_refresh_password(rkb, principal, password, service, brokername, usekrb5conf);
                         mtx_unlock(&rd_kafka_sasl_cyrus_kinit_lock);
                         break;
         }

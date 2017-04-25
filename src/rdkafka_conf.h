@@ -115,6 +115,7 @@ struct rd_kafka_conf_s {
 		int   relogin_min_time;
 		char *username;
 		char *password;
+        char *usekrb5conf;
 	} sasl;
 #endif
 
