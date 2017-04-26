@@ -358,7 +358,7 @@ static int rd_kafka_krb5_init_context_custom_profile(krb5_context *context) {
     /* init context profile */
     profile_t profile;
     int cbdata;
-    profile_init_vtable_static(&vtable, &cbdata, &profile); // note: before krb5-libs 1.12.2, this function is inaccessible to the krb5-libs,
+    profile_init_vtable(&vtable, &cbdata, &profile); // note: before krb5-libs 1.12.2, this function is inaccessible to the krb5-libs,
                                                      // even though you link the libkrb5, it still throw the "undefined reference to `profile_init_vtable'"
     krb5_init_context_profile(profile, 0, context);
     profile_release(profile);
