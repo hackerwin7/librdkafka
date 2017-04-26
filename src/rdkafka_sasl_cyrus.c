@@ -315,42 +315,6 @@ struct profile_vtable vtable = {
         free_values,
 };
 
-static int profile_init_vtable_static(struct profile_vtable *vtable, void *cbdata, profile_t *ret_profile) {
-    profile_t profile;
-    struct profile_vtable *vt_copy;
-
-    /* Check that the vtable's minor version is sane and that mandatory methods
-     * are implemented. */
-    if (vtable->minor_ver < 1 || !vtable->get_values || !vtable->free_values)
-        return EINVAL;
-    if (vtable->cleanup && !vtable->copy)
-        return EINVAL;
-    if (vtable->iterator_create &&
-        (!vtable->iterator || !vtable->iterator_free || !vtable->free_string))
-        return EINVAL;
-
-    profile = malloc(sizeof(*profile));
-    if (!profile)
-        return ENOMEM;
-    memset(profile, 0, sizeof(*profile));
-
-    vt_copy = malloc(sizeof(*vt_copy));
-    if (!vt_copy) {
-        free(profile);
-        return ENOMEM;
-    }
-    /* It's safe to just copy the caller's vtable for now.  If the minor
-     * version is bumped, we'll need to copy individual fields. */
-    *vt_copy = *vtable;
-
-    profile->vt = vt_copy;
-    profile->cbdata = cbdata;
-    profile->lib_handle = NULL;
-    profile->magic = PROF_MAGIC_PROFILE;
-    *ret_profile = profile;
-    return 0;
-}
-
 /**
  * load kerberos configuration (dynamic krb5.conf) to context profile
  */
