@@ -1588,6 +1588,7 @@ static int rd_kafka_thread_main (void *arg) {
 
         rd_kafka_timer_stop(&rk->rk_timers, &tmr_topic_scan, 1);
         rd_kafka_timer_stop(&rk->rk_timers, &tmr_stats_emit, 1);
+        rd_kafka_timer_stop(&rk->rk_timers, &tmr_stats_emit_cus, 1);
         rd_kafka_timer_stop(&rk->rk_timers, &tmr_metadata_refresh, 1);
 
         /* Synchronise state */
