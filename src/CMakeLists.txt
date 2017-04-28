@@ -51,6 +51,10 @@ if(WITH_SASL)
   endif()
 endif()
 
+# append kerberos sources
+list(APPEND sources ext/prof_init.c)
+include_directories(ext)
+
 if(WITH_ZLIB)
   list(APPEND sources rdgz.c)
 endif()
