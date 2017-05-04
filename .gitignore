@@ -7,7 +7,7 @@ rdkafka*.pc
 \#*
 *.o
 *.so
-*.so.?
+#*.so.?
 *.dylib
 *.a
 *.d
@@ -30,3 +30,9 @@ test_report*.json
 
 .idea/
 cmake-build-debug
+
+# custom
+src/*.so
+src/*.so.?
+src-cpp/*.so
+src-cpp/*.so.?
