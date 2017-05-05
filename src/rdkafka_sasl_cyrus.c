@@ -393,7 +393,7 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char
                 stage++;
         }
 
-        rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
+        rd_rkb_dbg(rkb, SECURITY, "KRB5REFRESH",
                "stage = %d, error code = %"PRId32"", stage, ret);
 
         if(options) krb5_get_init_creds_opt_free(context, options);
@@ -473,7 +473,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char *
             stage++;
         }
 
-        rd_rkb_log(rkb, LOG_INFO, "KRB5REFRESH",
+        rd_rkb_dbg(rkb, SECURITY, "KRB5REFRESH",
                "stage = %d, error code = %"PRId32"", stage, ret);
 
         if(options) krb5_get_init_creds_opt_free(context, options);
@@ -585,7 +585,7 @@ static int rd_kafka_sasl_cyrus_kinit_refresh (rd_kafka_broker_t *rkb) {
                 mode = 0;
         }
 
-        rd_rkb_log(rkb, LOG_INFO, "KRB5CONFIG",
+        rd_rkb_dbg(rkb, SECURITY, "KRB5CONFIG",
                    "use cmd = %d, use keytab = %d, service = %s, principal = %s, password = %s, keytab = %s, broker = %s, use krb5.conf = %d",
                    usecmd, usekeytab, service, principal, password, keytab, brokername, usekrb5conf);
 
