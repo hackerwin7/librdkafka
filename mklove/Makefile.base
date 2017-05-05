@@ -158,16 +158,16 @@ lib-install:
 		$(INSTALL) -m 0644 $(LIBNAME0).pc $$DESTDIR$(pkgconfigdir) \
 	) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf $(LIBFILENAME) $(LIBFILENAMELINK)) ; \
-	$(INSTALL) $(TOPDIR)/lib/krb5-lib/libkrb5.so.3.3 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/krb5-lib/libkrb5.so.3.3 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5.so.3.3 libkrb5.so.3) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5.so.3.3 libkrb5.so) ; \
-	$(INSTALL) $(TOPDIR)/lib/krb5-lib/libkrb5support.so.0.1 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/krb5-lib/libkrb5support.so.0.1 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5support.so.0.1 libkrb5support.so.0) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5support.so.0.1 libkrb5support.so) ; \
-	$(INSTALL) $(TOPDIR)/lib/krb5-lib/libgssapi_krb5.so.2.2 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/krb5-lib/libgssapi_krb5.so.2.2 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libgssapi_krb5.so.2.2 libgssapi_krb5.so.2) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libgssapi_krb5.so.2.2 libgssapi_krb5.so) ; \
-	$(INSTALL) $(TOPDIR)/lib/krb5-lib/libk5crypto.so.3.1 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/krb5-lib/libk5crypto.so.3.1 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libk5crypto.so.3.1 libk5crypto.so.3) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libk5crypto.so.3.1 libk5crypto.so)
 
