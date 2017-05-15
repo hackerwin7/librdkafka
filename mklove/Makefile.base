@@ -169,7 +169,10 @@ lib-install:
 	(cd $$DESTDIR$(libdir) && ln -sf libgssapi_krb5.so.2.2 libgssapi_krb5.so) ; \
 	cp $(TOPDIR)/lib/krb5-lib/libk5crypto.so.3.1 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libk5crypto.so.3.1 libk5crypto.so.3) ; \
-	(cd $$DESTDIR$(libdir) && ln -sf libk5crypto.so.3.1 libk5crypto.so)
+	(cd $$DESTDIR$(libdir) && ln -sf libk5crypto.so.3.1 libk5crypto.so); \
+	cp $(TOPDIR)/lib/krb5-lib/libcom_err.so.3.0 $$DESTDIR$(libdir); \
+	(cd $$DESTDIR$(libdir) && ln -sf libcom_err.so.3.0 libcom_err.so.3); \
+	(cd $$DESTDIR$(libdir) && ln -sf libcom_err.so.3.0 libcom_err.so)
 
 
 lib-uninstall:

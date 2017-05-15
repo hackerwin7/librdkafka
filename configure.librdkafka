@@ -47,7 +47,7 @@ function checks {
                   "#include <uuid/uuid.h>"
 
     # kerberos libs
-    mkl_lib_check "libkrb5" "" fail CC "-L/usr/local/lib -lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto" \
+    mkl_lib_check "libkrb5" "" fail CC "-lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto -lcom_err" \
                   "#include <krb5.h>"
 
     # required libs
