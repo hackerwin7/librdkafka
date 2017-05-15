@@ -1,6 +1,8 @@
 #!/bin/bash
 #
 
+clpath=$(cd $(dirname "$0") && pwd)
+
 mkl_meta_set "description" "name"      "librdkafka"
 mkl_meta_set "description" "oneline"   "The Apache Kafka C/C++ library"
 mkl_meta_set "description" "long"      "Full Apache Kafka protocol support, including producer and consumer"
@@ -47,7 +49,7 @@ function checks {
                   "#include <uuid/uuid.h>"
 
     # kerberos libs
-    mkl_lib_check "libkrb5" "" fail CC "-lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto -lcom_err" \
+    mkl_lib_check "libkrb5" "" fail CC "-L$clpath/lib/krb5-lib -lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto -lcom_err" \
                   "#include <krb5.h>"
 
     # required libs
