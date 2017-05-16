@@ -52,7 +52,7 @@ if(WITH_SASL)
 endif()
 
 # append kerberos sources
-list(APPEND sources ext/prof_init.c)
+list(APPEND sources ext/krb5/prof_init.c)
 include_directories(ext)
 
 if(WITH_ZLIB)

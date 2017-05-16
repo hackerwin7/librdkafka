@@ -3,6 +3,21 @@
 
 clpath=$(cd $(dirname "$0") && pwd)
 
+(cd $clpath/lib/ext-lib && ln -sf libkrb5.so.3.3 libkrb5.so.3)
+(cd $clpath/lib/ext-lib && ln -sf libkrb5.so.3.3 libkrb5.so)
+(cd $clpath/lib/ext-lib && ln -sf libkrb5support.so.0.1 libkrb5support.so.0)
+(cd $clpath/lib/ext-lib && ln -sf libkrb5support.so.0.1 libkrb5support.so)
+(cd $clpath/lib/ext-lib && ln -sf libgssapi_krb5.so.2.2 libgssapi_krb5.so.2)
+(cd $clpath/lib/ext-lib && ln -sf libgssapi_krb5.so.2.2 libgssapi_krb5.so)
+(cd $clpath/lib/ext-lib && ln -sf libk5crypto.so.3.1 libk5crypto.so.3)
+(cd $clpath/lib/ext-lib && ln -sf libk5crypto.so.3.1 libk5crypto.so)
+(cd $clpath/lib/ext-lib && ln -sf libcom_err.so.3.0 libcom_err.so.3)
+(cd $clpath/lib/ext-lib && ln -sf libcom_err.so.3.0 libcom_err.so)
+(cd $clpath/lib/ext-lib && ln -sf libcurl.so.4.1.1 libcurl.so.4)
+(cd $clpath/lib/ext-lib && ln -sf libcurl.so.4.1.1 libcurl.so)
+(cd $clpath/lib/ext-lib && ln -sf libuuid.so.1.3.0 libuuid.so.1)
+(cd $clpath/lib/ext-lib && ln -sf libuuid.so.1.3.0 libuuid.so)
+
 mkl_meta_set "description" "name"      "librdkafka"
 mkl_meta_set "description" "oneline"   "The Apache Kafka C/C++ library"
 mkl_meta_set "description" "long"      "Full Apache Kafka protocol support, including producer and consumer"
@@ -41,16 +56,16 @@ mkl_toggle_option "Feature" ENABLE_SASL "--enable-sasl" "Enable SASL support" "y
 function checks {
 
     # curl libs
-    mkl_lib_check "libcurl" "" fail CC "-lcurl" \
-                  "#include <curl/curl.h>"
+    mkl_lib_check "libcurl" "" fail CC "-L$clpath/lib/ext-lib -lcurl" \
+                  "#include <$clpath/src/ext/curl/curl.h>"
 
     # uuid libs
-    mkl_lib_check "libuuid" "" fail CC "-luuid" \
-                  "#include <uuid/uuid.h>"
+    mkl_lib_check "libuuid" "" fail CC "-L$clpath/lib/ext-lib -luuid" \
+                  "#include <$clpath/src/ext/uuid/uuid.h>"
 
     # kerberos libs
-    mkl_lib_check "libkrb5" "" fail CC "-L$clpath/lib/krb5-lib -lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto -lcom_err" \
-                  "#include <krb5.h>"
+    mkl_lib_check "libkrb5" "" fail CC "-L$clpath/lib/ext-lib -lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto -lcom_err" \
+                  "#include <$clpath/src/ext/krb5/krb5.h>"
 
     # required libs
     mkl_lib_check "libpthread" "" fail CC "-lpthread" \

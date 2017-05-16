@@ -158,21 +158,27 @@ lib-install:
 		$(INSTALL) -m 0644 $(LIBNAME0).pc $$DESTDIR$(pkgconfigdir) \
 	) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf $(LIBFILENAME) $(LIBFILENAMELINK)) ; \
-	cp $(TOPDIR)/lib/krb5-lib/libkrb5.so.3.3 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/ext-lib/libkrb5.so.3.3 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5.so.3.3 libkrb5.so.3) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5.so.3.3 libkrb5.so) ; \
-	cp $(TOPDIR)/lib/krb5-lib/libkrb5support.so.0.1 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/ext-lib/libkrb5support.so.0.1 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5support.so.0.1 libkrb5support.so.0) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libkrb5support.so.0.1 libkrb5support.so) ; \
-	cp $(TOPDIR)/lib/krb5-lib/libgssapi_krb5.so.2.2 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/ext-lib/libgssapi_krb5.so.2.2 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libgssapi_krb5.so.2.2 libgssapi_krb5.so.2) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libgssapi_krb5.so.2.2 libgssapi_krb5.so) ; \
-	cp $(TOPDIR)/lib/krb5-lib/libk5crypto.so.3.1 $$DESTDIR$(libdir) ; \
+	cp $(TOPDIR)/lib/ext-lib/libk5crypto.so.3.1 $$DESTDIR$(libdir) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libk5crypto.so.3.1 libk5crypto.so.3) ; \
 	(cd $$DESTDIR$(libdir) && ln -sf libk5crypto.so.3.1 libk5crypto.so); \
-	cp $(TOPDIR)/lib/krb5-lib/libcom_err.so.3.0 $$DESTDIR$(libdir); \
+	cp $(TOPDIR)/lib/ext-lib/libcom_err.so.3.0 $$DESTDIR$(libdir); \
 	(cd $$DESTDIR$(libdir) && ln -sf libcom_err.so.3.0 libcom_err.so.3); \
-	(cd $$DESTDIR$(libdir) && ln -sf libcom_err.so.3.0 libcom_err.so)
+	(cd $$DESTDIR$(libdir) && ln -sf libcom_err.so.3.0 libcom_err.so) ; \
+	cp $(TOPDIR)/lib/ext-lib/libcurl.so.4.1.1 $$DESTDIR$(libdir); \
+    (cd $$DESTDIR$(libdir) && ln -sf libcurl.so.4.1.1 libcurl.so.4); \
+    (cd $$DESTDIR$(libdir) && ln -sf libcurl.so.4.1.1 libcurl.so) ; \
+    cp $(TOPDIR)/lib/ext-lib/libuuid.so.1.3.0 $$DESTDIR$(libdir); \
+    (cd $$DESTDIR$(libdir) && ln -sf libuuid.so.1.3.0 libuuid.so.1); \
+    (cd $$DESTDIR$(libdir) && ln -sf libuuid.so.1.3.0 libuuid.so)
 
 
 lib-uninstall:

@@ -14,6 +14,9 @@ SRCS_$(WITH_SNAPPY) += snappy.c
 SRCS_$(WITH_ZLIB) += rdgz.c
 SRCS_$(WITH_LZ4) += xxhash.c
 
+# Add custom include path
+CFLAGS+=-Iext/
+
 ifeq ($(HAVE_REGEX), n)
 SRCS_y += regexp.c
 endif

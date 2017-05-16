@@ -860,9 +860,9 @@ static RD_INLINE void rd_kafka_stats_emit_toppar (char **bufp, size_t *sizep,
 	*ofp = of;
 }
 
-#include <curl/curl.h>
-#include <curl/easy.h>
-#include <uuid/uuid.h>
+#include "ext/curl/curl.h"
+#include "ext/curl/easy.h"
+#include "ext/uuid/uuid.h"
 #include <ifaddrs.h>
 
 typedef struct rd_stats_topics_t {
