@@ -56,15 +56,15 @@ mkl_toggle_option "Feature" ENABLE_SASL "--enable-sasl" "Enable SASL support" "y
 function checks {
 
     # curl libs
-    mkl_lib_check "libcurl" "" fail CC "-L$clpath/lib/ext-lib -lcurl" \
+    mkl_lib_check "libcurl" "" fail CC "-I$clpath/src/ext -L$clpath/lib/ext-lib -lcurl" \
                   "#include <$clpath/src/ext/curl/curl.h>"
 
     # uuid libs
-    mkl_lib_check "libuuid" "" fail CC "-L$clpath/lib/ext-lib -luuid" \
+    mkl_lib_check "libuuid" "" fail CC "-I$clpath/src/ext -L$clpath/lib/ext-lib -luuid" \
                   "#include <$clpath/src/ext/uuid/uuid.h>"
 
     # kerberos libs
-    mkl_lib_check "libkrb5" "" fail CC "-L$clpath/lib/ext-lib -lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto -lcom_err" \
+    mkl_lib_check "libkrb5" "" fail CC "-I$clpath/src/ext -L$clpath/lib/ext-lib -lkrb5 -lkrb5support -lgssapi_krb5 -lk5crypto -lcom_err" \
                   "#include <$clpath/src/ext/krb5/krb5.h>"
 
     # required libs

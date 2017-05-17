@@ -174,11 +174,11 @@ lib-install:
 	(cd $$DESTDIR$(libdir) && ln -sf libcom_err.so.3.0 libcom_err.so.3); \
 	(cd $$DESTDIR$(libdir) && ln -sf libcom_err.so.3.0 libcom_err.so) ; \
 	cp $(TOPDIR)/lib/ext-lib/libcurl.so.4.1.1 $$DESTDIR$(libdir); \
-    	(cd $$DESTDIR$(libdir) && ln -sf libcurl.so.4.1.1 libcurl.so.4); \
-    	(cd $$DESTDIR$(libdir) && ln -sf libcurl.so.4.1.1 libcurl.so) ; \
-    	cp $(TOPDIR)/lib/ext-lib/libuuid.so.1.3.0 $$DESTDIR$(libdir); \
-    	(cd $$DESTDIR$(libdir) && ln -sf libuuid.so.1.3.0 libuuid.so.1); \
-    	(cd $$DESTDIR$(libdir) && ln -sf libuuid.so.1.3.0 libuuid.so)
+    (cd $$DESTDIR$(libdir) && ln -sf libcurl.so.4.1.1 libcurl.so.4); \
+    (cd $$DESTDIR$(libdir) && ln -sf libcurl.so.4.1.1 libcurl.so) ; \
+    cp $(TOPDIR)/lib/ext-lib/libuuid.so.1.3.0 $$DESTDIR$(libdir); \
+    (cd $$DESTDIR$(libdir) && ln -sf libuuid.so.1.3.0 libuuid.so.1); \
+    (cd $$DESTDIR$(libdir) && ln -sf libuuid.so.1.3.0 libuuid.so)
 
 
 lib-uninstall:

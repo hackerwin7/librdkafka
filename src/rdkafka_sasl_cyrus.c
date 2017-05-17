@@ -226,7 +226,7 @@ static void rd_kafka_krb5_conf_get(rd_kafka_broker_t *rkb, int *use_cmd, int *us
 
 /* kerboers custom profile lib
  * see detail in kerboers sources: profile.h, test_vtable.c prof_int.c*/
-#include "ext/krb5/prof_int.h"
+#include "krb5/prof_int.h"
 
 static void free_values(void *cbdata, char **values) {
     char **v;
