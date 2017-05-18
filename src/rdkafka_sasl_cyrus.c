@@ -252,8 +252,9 @@ static long get_values(void *cbdata, const char *const *names, char ***ret_value
             (*ret_values)[0] = strdup("BDP.JD.COM");
             (*ret_values)[1] = NULL;
         } else if(!strcmp(names[1], "dns_lookup_realm") ||
-                !strcmp(names[0], "dns_lookup_kdc") ||
-                !strcmp(names[0], "rdns")) {
+                !strcmp(names[1], "dns_lookup_kdc") ||
+                !strcmp(names[1], "rdns") ||
+                !strcmp(names[1], "ignore_acceptor_hostname")) {
             (*ret_values)[0] = strdup("false");
             (*ret_values)[1] = NULL;
         } else if(!strcmp(names[1], "ticket_lifetime")) {
@@ -262,7 +263,8 @@ static long get_values(void *cbdata, const char *const *names, char ***ret_value
         } else if(!strcmp(names[1], "renew_lifetime")) {
             (*ret_values)[0] = strdup("7d");
             (*ret_values)[1] = NULL;
-        } else if(!strcmp(names[1], "forwardable")) {
+        } else if(!strcmp(names[1], "forwardable") ||
+                  !strcmp(names[1], "dns_canonicalize_hostname")) {
             (*ret_values)[0] = strdup("true");
             (*ret_values)[1] = NULL;
         } else if(!strcmp(names[1], "kdc_timeout")) {
@@ -270,6 +272,10 @@ static long get_values(void *cbdata, const char *const *names, char ***ret_value
             (*ret_values)[1] = NULL;
         } else if(!strcmp(names[1], "max_retries")) {
             (*ret_values)[0] = strdup("2");
+            (*ret_values)[1] = NULL;
+        } else if(!strcmp(names[1], "default_ccache_name")) {
+            //(*ret_values)[0] = strdup("FILE:/tmp/krb5cc_%{uid}");
+            (*ret_values)[0] = strdup("KEYRING:persistent:%{uid}");
             (*ret_values)[1] = NULL;
         } else {
             free(*ret_values);
@@ -279,7 +285,10 @@ static long get_values(void *cbdata, const char *const *names, char ***ret_value
         if(!strcmp(names[1], "BDP.JD.COM")) {
             *ret_values = calloc(2, sizeof(*ret_values));
             if(!strcmp(names[2], "kdc")) {
-                (*ret_values)[0] = strdup("BJHC-JDQ-HUANGHE-7126.hadoop.jd.local");
+                /* random select kdc server*/
+                char kdcs[3][64] = {"BJHC-JDQ-HUANGHE-7126.hadoop.jd.local", "BJHC-JDQ-HUANGHE-7127.hadoop.jd.local", "BJHC-JDQ-HUANGHE-7128.hadoop.jd.local"};
+                srand(time(NULL));
+                (*ret_values)[0] = strdup(kdcs[rand() % 3]);
                 (*ret_values)[1] = NULL;
             } else if(!strcmp(names[2], "admin_server")) {
                 (*ret_values)[0] = strdup("BJHC-JDQ-HUANGHE-7126.hadoop.jd.local");
@@ -432,6 +441,11 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char *
             krb5_init_context(&context);
         else
             rd_kafka_krb5_init_context_custom_profile(&context);
+
+        //debug
+        char * def_cc_name = krb5_cc_default_name(context);
+        rd_rkb_dbg(rkb, SECURITY, "KRB5REFRESH",
+               "default ccache name is %s", def_cc_name);
 
         switch(stage) {
         /* Configure */
