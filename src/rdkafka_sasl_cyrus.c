@@ -273,11 +273,11 @@ static long get_values(void *cbdata, const char *const *names, char ***ret_value
         } else if(!strcmp(names[1], "max_retries")) {
             (*ret_values)[0] = strdup("2");
             (*ret_values)[1] = NULL;
-        } else if(!strcmp(names[1], "default_ccache_name")) {
+        } /*else if(!strcmp(names[1], "default_ccache_name")) {
             //(*ret_values)[0] = strdup("FILE:/tmp/krb5cc_%{uid}");
             (*ret_values)[0] = strdup("KEYRING:persistent:%{uid}");
             (*ret_values)[1] = NULL;
-        } else {
+        }*/ else {
             free(*ret_values);
             return PROF_NO_RELATION;
         }
@@ -350,7 +350,7 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char
         krb5_error_code ret = 0;
         krb5_creds creds;
         krb5_principal principal = NULL;
-        krb5_context context;
+        krb5_context context, origin_ctx;
         krb5_ccache ccache = NULL;
         krb5_get_init_creds_opt * options = NULL;
         char service_name[SLEN];
@@ -365,6 +365,13 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char
             krb5_init_context(&context);
         else
             rd_kafka_krb5_init_context_custom_profile(&context);
+
+        /* it's a temporary strategy to compatible with the case that
+        * the /etc/krb5.conf:/usr/local/etc/krb5.conf 's load default cache type is prior to
+        * custom init context by profile (use default cache type) */
+        krb5_init_context(&origin_ctx);
+        char * origin_def_cc_name = krb5_cc_default_name(origin_ctx);
+        krb5_cc_set_default_name(context, origin_def_cc_name);
 
         switch(stage) {
                 /* Configure */
@@ -411,6 +418,7 @@ static int rd_kafka_krb5_tgt_refresh_password(rd_kafka_broker_t *rkb, const char
         krb5_free_cred_contents(context, &creds);
         krb5_cc_close(context, ccache);
         krb5_free_context(context);
+        krb5_free_context(origin_ctx);
 
         return 0;
 }
@@ -425,7 +433,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char *
         krb5_error_code ret = 0;
         krb5_creds creds;
         krb5_principal principal = NULL;
-        krb5_context context;
+        krb5_context context, origin_ctx;
         krb5_ccache ccache = NULL;
         krb5_keytab keytab = 0;
         krb5_get_init_creds_opt * options = NULL;
@@ -442,10 +450,21 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char *
         else
             rd_kafka_krb5_init_context_custom_profile(&context);
 
-        //debug
+        //debug compatible with kerberos kernel sources debug
+        krb5_init_context(&origin_ctx);
+        rd_rkb_dbg(rkb, SECURITY, "KRB5REFRESH",
+                   "###### debug: begin to default the origin_ctx");
+        char * origin_def_cc_name = krb5_cc_default_name(origin_ctx);
+        rd_rkb_dbg(rkb, SECURITY, "KRB5REFRESH",
+                   "###### debug: begin to default the context");
         char * def_cc_name = krb5_cc_default_name(context);
         rd_rkb_dbg(rkb, SECURITY, "KRB5REFRESH",
-               "default ccache name is %s", def_cc_name);
+               "default cache name is %s, origin default cache name is %s", def_cc_name, origin_def_cc_name);
+
+        /* it's a temporary strategy to compatible with the case that
+         * the /etc/krb5.conf:/usr/local/etc/krb5.conf 's load default cache type is prior to
+         * custom init context by profile (use default cache type) */
+        krb5_cc_set_default_name(context, origin_def_cc_name);
 
         switch(stage) {
         /* Configure */
@@ -497,6 +516,7 @@ static int rd_kafka_krb5_tgt_refresh_keytab(rd_kafka_broker_t *rkb, const char *
         krb5_cc_close(context, ccache);
         krb5_kt_close(context, keytab);
         krb5_free_context(context);
+        krb5_free_context(origin_ctx);
 
         return 0;
 }
