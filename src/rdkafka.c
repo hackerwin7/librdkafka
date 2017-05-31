@@ -930,6 +930,9 @@ typedef struct rd_stats_cus_t {
     int64_t incoming_msgs_rate;
 } rd_stats_cus, *rd_stats_cus_s;
 
+static rd_stats_cus stats_prev;
+static rd_kafka_t rk_t_prev;
+
 /**
  * Emit custom and more diversities metrics than original
  * @param rk
@@ -939,8 +942,6 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     rd_kafka_itopic_t *rkt;
     shptr_rd_kafka_toppar_t *s_rktp;
     rd_stats_cus stats_cur;
-    static rd_stats_cus stats_prev;
-    static rd_kafka_t rk_t_prev;
 
 	//common machine metrics
 	stats_cur.pid = getpid();
@@ -1158,6 +1159,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 		/* common metrics */
 		_st_printf(
 			"{ "
+                    "\"emit_cnt\": \"%d\", "
 					"\"ip\": \"%s\", "
 					"\"pid\": \"%d\", "
 					"\"version\": \"%s\", "
@@ -1167,6 +1169,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 					"\"startime\": %"PRId64", "
 				"\"ts\": %"PRId64", "
 				"\"type\": %d, ",
+            stats_cur.emit_cnt,
 			stats_cur.ip,
 			stats_cur.pid,
 			stats_cur.version,
