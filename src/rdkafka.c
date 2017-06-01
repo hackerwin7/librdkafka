@@ -869,17 +869,17 @@ typedef struct rd_stats_topics_t {
     char topic_name[128];
     int64_t sent_bytes;
     int64_t sent_bytes_w;
-    int64_t sent_bytes_rate;
+    double sent_bytes_rate;
     int64_t sent_msgs;
     int64_t sent_msgs_w;
-    int64_t sent_msgs_rate;
+    double sent_msgs_rate;
 
     int64_t recv_bytes;
     int64_t recv_bytes_w;
-    int64_t recv_bytes_rate;
+    double recv_bytes_rate;
     int64_t recv_msgs;
     int64_t recv_msgs_w;
-    int64_t recv_msgs_rate;
+    double recv_msgs_rate;
     int64_t consume_lag; // all partition consume_lag sum
 } rd_stats_topics, *rd_stats_topics_s;
 
@@ -905,33 +905,37 @@ typedef struct rd_stats_cus_t {
     /* producer */
     int64_t outgoing_byte_total;
     int64_t outgoing_byte_total_w; // window state total (60s)
-    int64_t outgoing_byte_rate;
+    double outgoing_byte_rate;
     int64_t record_send_total; // message key/value pair total
     int64_t record_send_total_w; // window state
-    int64_t record_send_rate;
+    double record_send_rate;
     int64_t record_err_total;
     int64_t record_err_total_w;
-    int64_t record_err_rate;
+    double record_err_rate;
 
     /* producer/consumer */
     rd_stats_topics topics[1024];
     int topics_len;
     int64_t request_send_total;
     int64_t request_send_total_w;
-    int64_t request_send_rate;
+    double request_send_rate;
     int64_t reqp_latency_avg;
 
     /* consumer */
     int64_t incoming_byte_total;
     int64_t incoming_byte_total_w;
-    int64_t incoming_byte_rate;
+    double incoming_byte_rate;
     int64_t incoming_msgs_total;
     int64_t incoming_msgs_total_w;
-    int64_t incoming_msgs_rate;
+    double incoming_msgs_rate;
 } rd_stats_cus, *rd_stats_cus_s;
 
 static rd_stats_cus stats_prev;
 static rd_kafka_t rk_t_prev;
+
+static void init_stats(rd_stats_cus_s stats) {
+	stats->emit_cnt = 0;
+}
 
 /**
  * Emit custom and more diversities metrics than original
@@ -1012,20 +1016,26 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 	}
     stats_cur.outgoing_byte_total = rd_atomic64_get(&total_sent_bytes);
     stats_cur.outgoing_byte_total_w = stats_cur.outgoing_byte_total - stats_prev.outgoing_byte_total;
-    stats_cur.outgoing_byte_rate = stats_cur.outgoing_byte_total_w / 60;
+    stats_cur.outgoing_byte_rate = stats_cur.outgoing_byte_total_w / 60.0;
     stats_cur.record_send_total = rd_atomic64_get(&total_sent_msgs);
     stats_cur.record_send_total_w = stats_cur.record_send_total - stats_prev.record_send_total;
-    stats_cur.record_send_rate = stats_cur.record_send_total_w / 60;
+    stats_cur.record_send_rate = stats_cur.record_send_total_w / 60.0;
     stats_cur.record_err_total = rd_atomic64_get(&total_sent_msgs_err);
     stats_cur.record_err_total_w = stats_cur.record_err_total - stats_prev.record_err_total;
-    stats_cur.record_err_rate = stats_cur.record_err_total_w / 60;
+    stats_cur.record_err_rate = stats_cur.record_err_total_w / 60.0;
     stats_cur.request_send_total = rd_atomic64_get(&total_sent_request);
     stats_cur.request_send_total_w = stats_cur.request_send_total - stats_prev.request_send_total;
-    stats_cur.request_send_rate = stats_cur.request_send_total_w / 60;
+    stats_cur.request_send_rate = stats_cur.request_send_total_w / 60.0;
     stats_cur.incoming_byte_total = rd_atomic64_get(&total_recv_bytes);
     stats_cur.incoming_byte_total_w = stats_cur.incoming_byte_total - stats_prev.incoming_byte_total;
-    stats_cur.incoming_byte_rate = stats_cur.incoming_byte_total_w / 60;
+    stats_cur.incoming_byte_rate = stats_cur.incoming_byte_total_w / 60.0;
     stats_cur.reqp_latency_avg = rd_atomic64_get(&total_latency_avg) / rd_atomic32_get(&rk->rk_broker_cnt);
+    stats_cur.connection_count = conn_cnt;
+	rd_kafka_dbg(rk, ALL, "DEBUG", "record err totoal = %" PRId64"", stats_cur.record_err_total);
+	rd_kafka_dbg(rk, ALL, "DEBUG", "latency total = %" PRId64", broker cnt = %" PRId32"",
+				 rd_atomic64_get(&total_latency_avg), rd_atomic32_get(&rk->rk_broker_cnt));
+	rd_kafka_dbg(rk, ALL, "DEBUG", "request send totoal = %" PRId64"", stats_cur.request_send_total);
+
 
     stats_cur.topics_len = 0;
     rd_atomic64_t total_recv_msgs; rd_atomic64_init(&total_recv_msgs, 0); // all topic partitions metrics sum
@@ -1133,17 +1143,17 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
                 stats_cur.topics[stats_cur.topics_len].recv_msgs_w = stats_cur.topics[stats_cur.topics_len].recv_msgs;
             }
         }
-        stats_cur.topics[stats_cur.topics_len].sent_bytes_rate = stats_cur.topics[stats_cur.topics_len].sent_bytes_w / 60;
-        stats_cur.topics[stats_cur.topics_len].sent_msgs_rate = stats_cur.topics[stats_cur.topics_len].sent_msgs_w / 60;
-        stats_cur.topics[stats_cur.topics_len].recv_bytes_rate = stats_cur.topics[stats_cur.topics_len].recv_bytes_w / 60;
-        stats_cur.topics[stats_cur.topics_len].recv_msgs_rate = stats_cur.topics[stats_cur.topics_len].recv_msgs_w / 60;
+        stats_cur.topics[stats_cur.topics_len].sent_bytes_rate = stats_cur.topics[stats_cur.topics_len].sent_bytes_w / 60.0;
+        stats_cur.topics[stats_cur.topics_len].sent_msgs_rate = stats_cur.topics[stats_cur.topics_len].sent_msgs_w / 60.0;
+        stats_cur.topics[stats_cur.topics_len].recv_bytes_rate = stats_cur.topics[stats_cur.topics_len].recv_bytes_w / 60.0;
+        stats_cur.topics[stats_cur.topics_len].recv_msgs_rate = stats_cur.topics[stats_cur.topics_len].recv_msgs_w / 60.0;
         stats_cur.topics_len++;
         rd_kafka_topic_rdunlock(rkt);
         rd_atomic64_add(&total_recv_msgs, rd_atomic64_get(&topic_total_recv_bytes)); // total receive bytes not topic-level , recv messages use the toppar callback not socket receive handler
     }
     stats_cur.incoming_msgs_total = rd_atomic64_get(&total_recv_msgs);
     stats_cur.incoming_msgs_total_w = stats_cur.incoming_msgs_total - stats_prev.incoming_msgs_total;
-    stats_cur.incoming_msgs_rate = stats_cur.incoming_msgs_total_w / 60;
+    stats_cur.incoming_msgs_rate = stats_cur.incoming_msgs_total_w / 60.0;
     rd_kafka_rdunlock(rk);
 
     memcpy(&stats_prev, &stats_cur, sizeof(rd_stats_cus)); // save into previous stats
@@ -1186,11 +1196,11 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 					"\"produceMetrics\": { "
 							"\"outgoing-byte-total\": %"PRId64", "
 					"\"connection-count\": %d, "
-					"\"outgoing-byte-rate\": %"PRId64", "
-					"\"record-error-rate\": %"PRId64", "
+					"\"outgoing-byte-rate\": %lf, "
+					"\"record-error-rate\": %lf, "
 					"\"record-send-total\": %"PRId64", "
 					"\"request-latency-avg\": %"PRId64", "
-					"\"request-rate\": %"PRId64" },",
+					"\"request-rate\": %lf },",
 					stats_cur.outgoing_byte_total,
 					stats_cur.connection_count,
 					stats_cur.outgoing_byte_rate,
@@ -1201,9 +1211,9 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 			/* producer topic metrics */
 			_st_printf(
 				"\"produceTopicMetrics\": { "
-                        "\"byte-rate\": %"PRId64", "
+                        "\"byte-rate\": %lf, "
                     "\"byte-total\": %"PRId64", "
-                    "\"record-send-rate\": %"PRId64", "
+                    "\"record-send-rate\": %lf, "
                     "\"record-send-total\": %"PRId64" } ",
                 stats_cur.topics[t].sent_bytes_rate,
                 stats_cur.topics[t].sent_bytes,
@@ -1214,9 +1224,9 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
             _st_printf(
                 "\"consumeMetrics\": { "
                         "\"connection-count\": %d, "
-                        "\"incoming-byte-rate\": %"PRId64", "
+                        "\"incoming-byte-rate\": %lf, "
                     "\"incoming-byte-total\": %"PRId64", "
-                    "\"request-rate\": %"PRId64" }, ",
+                    "\"request-rate\": %lf }, ",
                 stats_cur.connection_count,
                 stats_cur.incoming_byte_rate,
                 stats_cur.incoming_byte_total,
@@ -1231,9 +1241,9 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
             /* consumer topic metrics */
             _st_printf(
                 "\"fetchmanagerTopicMetrics\": { "
-                        "\"bytes-consumed-rate\": %"PRId64", "
+                        "\"bytes-consumed-rate\": %lf, "
                     "\"bytes-consumed-total\": %"PRId64", "
-                    "\"records-consumed-rate\": %"PRId64", "
+                    "\"records-consumed-rate\": %lf, "
                     "\"records-consumed-total\": %"PRId64" }, ",
                 stats_cur.topics[t].recv_bytes_rate,
                 stats_cur.topics[t].recv_bytes,
@@ -1610,6 +1620,7 @@ static int rd_kafka_thread_main (void *arg) {
 			     rk->rk_conf.stats_interval_ms * 1000ll,
 			     rd_kafka_stats_emit_tmr_cb, NULL);
     /* custom stats emit, default is 60 seconds */
+	init_stats(&stats_prev);
     rd_kafka_timer_start(&rk->rk_timers, &tmr_stats_emit_cus,
                          60 * 1000 * 1000, rd_kafka_stats_emit_cus_tmr_cb, NULL);
         if (rk->rk_conf.metadata_refresh_interval_ms > 0)
