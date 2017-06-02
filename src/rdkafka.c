@@ -946,6 +946,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     rd_kafka_itopic_t *rkt;
     shptr_rd_kafka_toppar_t *s_rktp;
     rd_stats_cus stats_cur;
+    rd_avg_t rq_avg;
 
 	//common machine metrics
 	stats_cur.pid = getpid();
@@ -976,6 +977,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     rd_atomic64_t total_sent_request; rd_atomic64_init(&total_sent_request, 0);
     rd_atomic64_t total_recv_bytes; rd_atomic64_init(&total_recv_bytes, 0);
     rd_atomic64_t total_latency_avg; rd_atomic64_init(&total_latency_avg, 0);
+    rd_atomic64_t total_recv_msgs_err; rd_atomic64_init(&total_recv_msgs_err, 0);
 
     int conn_cnt = 0;
 
@@ -987,10 +989,11 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
 		rd_kafka_broker_lock(rkb);
         rd_atomic64_add(&total_sent_bytes, rd_atomic64_get(&rkb->rkb_c.tx_bytes)); // accumulate total sent bytes
         rd_atomic64_add(&total_sent_msgs, rd_atomic64_get(&rkb->rkb_c.tx_msgs));
-        rd_atomic64_add(&total_sent_msgs_err, rd_atomic64_get(&rkb->rkb_c.tx_msgs_err));
+        rd_atomic64_add(&total_sent_msgs_err, rd_atomic64_get(&rkb->rkb_c.tx_msgs_err)); // transmission error msgs not receive error msgs
         rd_atomic64_add(&total_sent_request, rd_atomic64_get(&rkb->rkb_c.tx));
         rd_atomic64_add(&total_recv_bytes, rd_atomic64_get(&rkb->rkb_c.rx_bytes));
-		rd_atomic64_add(&total_latency_avg, rkb->reqp_latency.ra_v.avg);
+		rd_avg_rollover(&rq_avg, &rkb->reqp_latency); rd_atomic64_add(&total_latency_avg, rq_avg.ra_v.avg);
+        rd_atomic64_add(&total_recv_msgs_err, rd_atomic64_get(&rkb->rkb_c.rx_msgs_err));
         /* exists prev stats */
         if(stats_cur.emit_cnt > 1) {
             /* connection count */
@@ -1020,7 +1023,7 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
     stats_cur.record_send_total = rd_atomic64_get(&total_sent_msgs);
     stats_cur.record_send_total_w = stats_cur.record_send_total - stats_prev.record_send_total;
     stats_cur.record_send_rate = stats_cur.record_send_total_w / 60.0;
-    stats_cur.record_err_total = rd_atomic64_get(&total_sent_msgs_err);
+    stats_cur.record_err_total = rd_atomic64_get(&total_sent_msgs_err) + rd_atomic64_get(&total_recv_msgs_err);
     stats_cur.record_err_total_w = stats_cur.record_err_total - stats_prev.record_err_total;
     stats_cur.record_err_rate = stats_cur.record_err_total_w / 60.0;
     stats_cur.request_send_total = rd_atomic64_get(&total_sent_request);

@@ -1179,6 +1179,7 @@ int rd_kafka_recv (rd_kafka_broker_t *rkb) {
 	else if (r == -1) {
 		err_code = RD_KAFKA_RESP_ERR__TRANSPORT;
 		rd_atomic64_add(&rkb->rkb_c.rx_err, 1);
+        rd_atomic64_add(&rkb->rkb_c.rx_msgs_err,  rd_atomic32_get(&rkbuf->rkbuf_msgq.rkmq_msg_cnt));
 		goto err;
 	}
 
@@ -1208,6 +1209,7 @@ int rd_kafka_recv (rd_kafka_broker_t *rkb) {
 				 rkbuf->rkbuf_len-4,
 				 rkb->rkb_rk->rk_conf.recv_max_msg_size);
 			rd_atomic64_add(&rkb->rkb_c.rx_err, 1);
+            rd_atomic64_add(&rkb->rkb_c.rx_msgs_err,  rd_atomic32_get(&rkbuf->rkbuf_msgq.rkmq_msg_cnt));
 			err_code = RD_KAFKA_RESP_ERR__BAD_MSG;
 
 			goto err;
@@ -1721,6 +1723,9 @@ int rd_kafka_send (rd_kafka_broker_t *rkb) {
 			msghdr_print(rkb->rkb_rk, "SEND", msg, 1);
 		}
 
+        /* send total, including success and failure */
+        rd_atomic64_add(&rkb->rkb_c.tx_msgs, rd_atomic32_get(&rkbuf->rkbuf_msgq.rkmq_msg_cnt));
+
 		/* send socket here, msg is socket.h struct */
 		if ((r = rd_kafka_broker_send(rkb, msg)) == -1) {
 
@@ -1729,9 +1734,6 @@ int rd_kafka_send (rd_kafka_broker_t *rkb) {
 			/* FIXME: */
 			return -1;
 		}
-
-        /* send success */
-        rd_atomic64_add(&rkb->rkb_c.tx_msgs, rd_atomic32_get(&rkbuf->rkbuf_msgq.rkmq_msg_cnt));
 
 		rkbuf->rkbuf_of += r;
 

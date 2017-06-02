@@ -133,6 +133,8 @@ struct rd_kafka_broker_s { /* rd_kafka_broker_t */
 		/* custom */
         rd_atomic64_t tx_msgs; /* Total send payload msgs */
         rd_atomic64_t tx_msgs_err; /* Total send payload msgs errors */
+        rd_atomic64_t rx_msgs;
+        rd_atomic64_t rx_msgs_err;
 
 		rd_atomic64_t rx_bytes;
 		rd_atomic64_t rx;    /* Kafka messages (not payload msgs) */
