@@ -32,4 +32,4 @@ Install [kafkacat](https://github.com/edenhill/kafkacat) to try it
 ```apple js
 kafkacat -b ${BROKER_HOST} -L -X security.protocol=SASL_PLAINTEXT -X sasl.kerberos.service.name=kafka  -X sasl.kerberos.keytab=keytab -X sasl.kerberos.principal=username -X sasl.kerberos.principal.password=password
 ```
-use in code to see [examples/rdkafka_krb5_example.c]()
+use in code to see [examples/rdkafka_krb5_example.c](https://github.com/hackerwin7/librdkafka/blob/master/examples/rdkafka_krb5_example.c)
