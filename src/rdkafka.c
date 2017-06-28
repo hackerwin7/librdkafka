@@ -1271,79 +1271,9 @@ static void rd_kafka_stats_emit_custom(rd_kafka_t *rk) {
         /* show the format buf string */
         printf("%s\n", buf);
 
-        /* buf string convert into content */
-        char *content = rd_malloc(size + 2 * 1024);
-        sprintf(content, "t=%s&v=%s&rm=%d", "jdqsdkreport.200000", buf, stats_cur.ts);
-
-        /* send metrics buf string by http */
-        // todo take the init and clean to the out of the loop
-        CURL * curl;
-        CURLcode curl_res;
-        curl = curl_easy_init();
-        if(curl) {
-            struct curl_slist *headers = NULL;
-            headers = curl_slist_append(headers, "Content-type: application/octet-stream");
-            headers = curl_slist_append(headers, "Connection: Keep-Alive");
-            headers = curl_slist_append(headers, "Charset: UTF-8");
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-            curl_easy_setopt(curl, CURLOPT_URL, "http://logbus.bdp.jd.com/log.gif");
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, content);
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 6000);
-            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 6000);
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, noop_cb);
-            curl_res = curl_easy_perform(curl);
-            if(curl_res != CURLE_OK)
-                fprintf(stderr, "curl easy perform failed: %s\n", curl_easy_strerror(curl_res));
-            curl_slist_free_all(headers);
-            curl_easy_cleanup(curl);
-        }
-
         /* free */
         free(buf);
-        free(content);
 	}
-}
-
-/**
- * apply the appId and token by basic info
- */
-typedef struct req_apptoken_arg_t {
-    char appid[128];
-    char topic[64];
-    char clusterid[64];
-    char erp_apply[32];
-    char erp_resp[32];
-    int app_groupid;
-    int requestid;
-} req_apptoken_arg;
-
-int rd_kafka_produce_appId_token_apply(char* appId, char* token, req_apptoken_arg arg) {
-    char *content = rd_malloc(1024 * 3);
-    char *data = rd_malloc(1024 * 2);
-    sprintf(data,
-            "{\"appId\":\"%s\",\"topic\":\"%s\",\"clusterId\":\"%s\",\"proposer\":\"%s\",\"operator\":\"%s\",\"appGroupId\":%d,\"bpmRequestId\":%d}",
-            arg.appid, arg.topic, arg.clusterid, arg.erp_apply, arg.erp_resp, arg.app_groupid, arg.requestid);
-    sprintf(content, "appId=%s&token=%s&time=%d&data=%s", appId, token, (signed long long) time(NULL), data);
-    CURL *curl;
-    CURLcode curl_res;
-    curl = curl_easy_init();
-    if(curl) {
-        struct curl_slist *headers = NULL;
-        headers = curl_slist_append(headers, "Charset: UTF-8");
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_URL, "http://192.168.144.98:8900/api/jdqcenter/auth/generate/produce");
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, content);
-        curl_res = curl_easy_perform(curl);
-        if(curl_res != CURLE_OK)
-            fprintf(stderr, "curl easy perform failed in rd_kafka_produce_appId_token_apply: %s\n", curl_easy_strerror(curl_res));
-        char recvbuff[1024]; size_t byte_num;
-        curl_easy_recv(curl, recvbuff, 1024, &byte_num);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-        printf("recv: %s\n", recvbuff);
-    }
-    free(data);
-    free(content);
 }
 
 /**
